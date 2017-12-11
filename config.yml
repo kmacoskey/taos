@@ -1,0 +1,4 @@
+conn_str: "postgres://taos:changeme@127.0.0.1:5432/taos?sslmode=disable"
+log_format: text
+log_level: debug
+
