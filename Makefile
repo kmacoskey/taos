@@ -23,5 +23,8 @@ run:
 build: clean
 	go build ${LDFLAGS} -o taos *.go
 
+debug: clean
+	go build -gcflags "-N -l" -o taos *.go
+
 clean:
 	rm -rf taos coverage.out coverage-all.out

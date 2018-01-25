@@ -3,46 +3,42 @@ package main
 import (
 	"fmt"
 	"github.com/gorilla/mux"
+	"github.com/kmacoskey/taos/app"
+	"github.com/kmacoskey/taos/handlers"
 	"github.com/kmacoskey/taos/middleware"
 	"net/http"
 )
 
-var config serverConfig
+var config app.ServerConfig
 
 func main() {
 	// Server configuration
-	if err := LoadServerConfig(&config); err != nil {
+	if err := app.LoadServerConfig(&config, "."); err != nil {
 		panic(fmt.Errorf("Invalid application configuration: %s", err))
 	}
 
 	// Logging
-	if err := InitLogger(); err != nil {
+	if err := app.InitLogger(config.Logging); err != nil {
 		panic(fmt.Errorf("Logging Initialization Failed: %s", err))
 	}
 
 	// Database Connection
-	db, err := DatabaseConnect()
+	db, err := app.DatabaseConnect(config.ConnStr)
 	if err != nil {
 		panic(fmt.Errorf("Connection to Database Failed: %s", err))
 	}
 	defer db.Close()
 
-	// Wire up the routing
+	// Routing
 	router := mux.NewRouter()
 
-	router.Handle("/", middleware.Adapt(router,
-		IndexHandler(),
-		middleware.Logging(),
-	))
+	router.Handle("/clusters/{id}", app.Adapt(
+		router,
+		handlers.GetCluster(),
+		middleware.Transactional(db),
+		app.WithRequestContext(),
+	)).Methods("GET")
 
 	// Start the server
 	http.ListenAndServe(":8080", router)
-}
-
-func IndexHandler() middleware.Adapter {
-	return func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			fmt.Fprintf(w, "Hi there, I love %s!", r.URL.Path[1:])
-		})
-	}
 }

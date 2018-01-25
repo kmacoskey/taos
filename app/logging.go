@@ -1,12 +1,12 @@
-package main
+package app
 
 import (
 	log "github.com/sirupsen/logrus"
 	"os"
 )
 
-func InitLogger() error {
-	switch config.LogFormat {
+func InitLogger(config LoggingConfig) error {
+	switch config.Format {
 	case "text":
 		log.SetFormatter(&log.TextFormatter{})
 	case "json":
@@ -15,7 +15,7 @@ func InitLogger() error {
 		log.SetFormatter(&log.TextFormatter{})
 	}
 
-	switch config.LogLevel {
+	switch config.Level {
 	case "debug":
 		log.SetLevel(log.DebugLevel)
 	case "info":
