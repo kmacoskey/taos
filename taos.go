@@ -32,9 +32,16 @@ func main() {
 	// Routing
 	router := mux.NewRouter()
 
-	router.Handle("/clusters/{id}", app.Adapt(
+	router.Handle("/cluster/{id}", app.Adapt(
 		router,
 		handlers.GetCluster(),
+		middleware.Transactional(db),
+		app.WithRequestContext(),
+	)).Methods("GET")
+
+	router.Handle("/clusters", app.Adapt(
+		router,
+		handlers.GetClusters(),
 		middleware.Transactional(db),
 		app.WithRequestContext(),
 	)).Methods("GET")
