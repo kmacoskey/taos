@@ -1,9 +1,8 @@
 package: github.com/kmacoskey/taos
 import:
 - package: github.com/sirupsen/logrus
-  version: ^1.0.4
 - package: github.com/spf13/viper
-  version: aafc9e6bc7b7bb53ddaa75a5ef49a17d6e654be5
 - package: github.com/google/uuid
-  version: ^0.2
 - package: github.com/jmoiron/sqlx
+- package: github.com/onsi/ginkgo
+- package: github.com/onsi/gomega
