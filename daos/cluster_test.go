@@ -52,10 +52,14 @@ var _ = Describe("Cluster", func() {
 	var (
 		cluster1 models.Cluster
 		cluster2 models.Cluster
+		clusters []models.Cluster
 		err      error
+		dao      ClusterDao
 	)
 
 	BeforeEach(func() {
+		dao = ClusterDao{}
+
 		// Create a new RequestContext for each test
 		rc = app.RequestContext{}
 
@@ -84,13 +88,19 @@ var _ = Describe("Cluster", func() {
 				rc.Tx().MustExec("INSERT INTO clusters (id, name, status) VALUES ($1, $2, $3)", cluster2.Id, cluster2.Name, cluster2.Status)
 			})
 			It("Should return all clusters", func() {
-				Expect(GetClusters(rc)).To(HaveLen(2))
+				Expect(dao.GetClusters(rc)).To(HaveLen(2))
 			})
 		})
 
 		Context("When no clusters exist", func() {
+			BeforeEach(func() {
+				clusters, err = dao.GetClusters(rc)
+			})
 			It("Should return an empty list of Clusters", func() {
-				Expect(GetClusters(rc)).To(HaveLen(0))
+				Expect(dao.GetClusters(rc)).To(HaveLen(0))
+			})
+			It("should not error", func() {
+				Expect(err).ShouldNot(HaveOccurred())
 			})
 
 		})
@@ -103,21 +113,21 @@ var _ = Describe("Cluster", func() {
 				rc.Tx().MustExec("INSERT INTO clusters (id, name, status) VALUES ($1, $2, $3)", cluster1.Id, cluster1.Name, cluster1.Status)
 			})
 			It("Should return a cluster of the same id", func() {
-				Expect(GetCluster(rc, 1)).To(Equal(cluster1))
+				Expect(dao.GetCluster(rc, 1)).To(Equal(cluster1))
 			})
 		})
 
 		Context("That does not exist", func() {
 			BeforeEach(func() {
-				cluster1, err = GetCluster(rc, 1)
+				cluster1, err = dao.GetCluster(rc, 1)
 			})
 			It("Should return an empty Cluster", func() {
 				Expect(cluster1).To(Equal(models.Cluster{}))
 			})
 			It("should error", func() {
-				Expect(err).To(HaveOccurred())
+				Expect(err).Should(HaveOccurred())
 			})
 		})
-
 	})
+
 })

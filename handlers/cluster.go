@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/gorilla/mux"
 	"github.com/kmacoskey/taos/app"
+	"github.com/kmacoskey/taos/daos"
 	"github.com/kmacoskey/taos/services"
 	log "github.com/sirupsen/logrus"
 	"net/http"
