@@ -6,13 +6,19 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func GetCluster(rc app.RequestContext, id int) (models.Cluster, error) {
+type ClusterDao struct{}
+
+func NewClusterDao() *ClusterDao {
+	return &ClusterDao{}
+}
+
+func (dao *ClusterDao) GetCluster(rc app.RequestContext, id int) (models.Cluster, error) {
 	cluster := models.Cluster{}
 	err := rc.Tx().Get(&cluster, "SELECT * FROM clusters WHERE id=$1", id)
 	return cluster, err
 }
 
-func GetClusters(rc app.RequestContext) ([]models.Cluster, error) {
+func (dao *ClusterDao) GetClusters(rc app.RequestContext) ([]models.Cluster, error) {
 	clusters := []models.Cluster{}
 	cluster := models.Cluster{}
 	rows, err := rc.Tx().Queryx("SELECT * FROM clusters")

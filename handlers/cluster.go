@@ -34,7 +34,8 @@ func GetCluster() app.Adapter {
 				logger.Error("invalid cluster id in request")
 			}
 
-			cluster, err := services.GetCluster(rc, id)
+			clusterService := services.NewClusterService(daos.NewClusterDao())
+			cluster, err := clusterService.GetCluster(rc, id)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				logger.Error("could not retrieve cluster for given id in request")
@@ -63,7 +64,8 @@ func GetClusters() app.Adapter {
 
 			rc := app.GetRequestContext(r)
 
-			clusters, err := services.GetClusters(rc)
+			clusterService := services.NewClusterService(daos.NewClusterDao())
+			clusters, err := clusterService.GetClusters(rc)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				logger.Error("could not retrieve clusters")
