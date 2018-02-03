@@ -6,6 +6,7 @@ import (
 )
 
 func InitLogger(config LoggingConfig) error {
+
 	switch config.Format {
 	case "text":
 		log.SetFormatter(&log.TextFormatter{})
@@ -36,15 +37,14 @@ func InitLogger(config LoggingConfig) error {
 	// Can be any io.Writer
 	log.SetOutput(os.Stdout)
 
-	log.WithFields(log.Fields{
-		"event": "startup",
-		"topic": "taos",
-	}).Info("logging begins")
+	logger := log.WithFields(log.Fields{
+		"topic":   "taos",
+		"package": "app",
+		"context": "logger",
+		"event":   "startup",
+	})
 
-	log.WithFields(log.Fields{
-		"event": "startup",
-		"topic": "taos",
-	}).Info("server configuration loaded")
+	logger.Info("logging begins")
 
 	return nil
 }

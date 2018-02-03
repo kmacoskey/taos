@@ -57,8 +57,10 @@ func (ch *ClusterHandler) GetCluster() app.Adapter {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			logger := log.WithFields(log.Fields{
-				"topic": "taos",
-				"event": "cluster_handler",
+				"topic":   "taos",
+				"package": "handlers",
+				"context": "cluster_handler",
+				"event":   "getcluster",
 			})
 
 			vars := mux.Vars(r)

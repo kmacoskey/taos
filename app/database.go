@@ -7,6 +7,13 @@ import (
 )
 
 func DatabaseConnect(connStr string) (*sqlx.DB, error) {
+	logger := log.WithFields(log.Fields{
+		"topic":   "taos",
+		"package": "app",
+		"context": "database",
+		"event":   "startup",
+	})
+
 	// This Pings the database trying to connect, panics on error
 	// use sqlx.Open() for sql.Open() semantics
 	db, err := sqlx.Connect("postgres", connStr)
@@ -14,10 +21,7 @@ func DatabaseConnect(connStr string) (*sqlx.DB, error) {
 		return nil, err
 	}
 
-	log.WithFields(log.Fields{
-		"event": "startup",
-		"topic": "taos",
-	}).Info("connection to database confirmed")
+	logger.Info("connection to database confirmed")
 
 	return db, err
 }

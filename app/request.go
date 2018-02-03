@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	log "github.com/sirupsen/logrus"
 	"net/http"
 	"time"
 )
@@ -19,8 +20,15 @@ var RequestContextKey string = "request"
 func WithRequestContext() Adapter {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			logger := log.WithFields(log.Fields{
+				"topic":   "taos",
+				"package": "app",
+				"context": "requestcontext",
+				"event":   "newrequest",
+			})
 			rc := NewRequestContext(r.Context(), r)
 			ctx := context.WithValue(r.Context(), RequestContextKey, rc)
+			logger.Debug("created new request context")
 			h.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

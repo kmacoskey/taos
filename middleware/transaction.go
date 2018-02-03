@@ -11,28 +11,32 @@ import (
 func Transactional(db *sqlx.DB) app.Adapter {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			txLogger := log.WithFields(log.Fields{
-				"topic": "taos",
-				"event": "transaction",
+			logger := log.WithFields(log.Fields{
+				"topic":   "taos",
+				"package": "middleware",
+				"context": "transaction",
+				"event":   "newtransaction",
 			})
 
 			tx, err := db.Beginx()
 			if err != nil {
-				txLogger.Panic("Could not create transaction")
+				logger.Panic("Could not create transaction")
 			}
-			txLogger.Debug("transaction created")
+			logger.Debug("transaction created")
 
 			rc := app.GetRequestContext(r)
 			rc.SetTx(tx)
+
+			logger.Debug("attached transaction to request context")
 
 			var txe error
 			defer func() {
 				if err := recover(); err != nil {
 					txe = tx.Rollback()
-					txLogger.Error("transaction reverted")
+					logger.Error("transaction reverted")
 				} else {
 					txe = tx.Commit()
-					txLogger.Debug("transaction commited")
+					logger.Debug("transaction commited")
 				}
 			}()
 
