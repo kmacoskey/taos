@@ -86,13 +86,8 @@ func NewValidClusterDao() *ValidClusterDao {
 	return &ValidClusterDao{}
 }
 
-func (dao *ValidClusterDao) GetCluster(rc app.RequestContext, id int) (models.Cluster, error) {
-	cluster := models.Cluster{
-		Id:     1,
-		Name:   "cluster",
-		Status: "status",
-	}
-	return cluster, nil
+func (dao *ValidClusterDao) GetCluster(rc app.RequestContext, id int) (*models.Cluster, error) {
+	return &models.Cluster{Id: 1, Name: "cluster", Status: "status"}, nil
 }
 
 func (dao *ValidClusterDao) GetClusters(rc app.RequestContext) ([]models.Cluster, error) {
@@ -109,9 +104,8 @@ func NewEmptyClusterDao() *EmptyClusterDao {
 	return &EmptyClusterDao{}
 }
 
-func (dao *EmptyClusterDao) GetCluster(rc app.RequestContext, id int) (models.Cluster, error) {
-	cluster := models.Cluster{}
-	return cluster, errors.New("foo")
+func (dao *EmptyClusterDao) GetCluster(rc app.RequestContext, id int) (*models.Cluster, error) {
+	return &models.Cluster{}, errors.New("foo")
 }
 
 func (dao *EmptyClusterDao) GetClusters(rc app.RequestContext) ([]models.Cluster, error) {

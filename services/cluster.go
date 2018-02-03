@@ -6,7 +6,7 @@ import (
 )
 
 type clusterDao interface {
-	GetCluster(rc app.RequestContext, id int) (models.Cluster, error)
+	GetCluster(rc app.RequestContext, id int) (*models.Cluster, error)
 	GetClusters(rc app.RequestContext) ([]models.Cluster, error)
 }
 
@@ -20,7 +20,7 @@ func NewClusterService(dao clusterDao) *ClusterService {
 
 func (s *ClusterService) GetCluster(rc app.RequestContext, id int) (*models.Cluster, error) {
 	cluster, err := s.dao.GetCluster(rc, id)
-	return &cluster, err
+	return cluster, err
 }
 
 func (s *ClusterService) GetClusters(rc app.RequestContext) ([]models.Cluster, error) {

@@ -12,10 +12,13 @@ func NewClusterDao() *ClusterDao {
 	return &ClusterDao{}
 }
 
-func (dao *ClusterDao) GetCluster(rc app.RequestContext, id int) (models.Cluster, error) {
+func (dao *ClusterDao) GetCluster(rc app.RequestContext, id int) (*models.Cluster, error) {
 	cluster := models.Cluster{}
 	err := rc.Tx().Get(&cluster, "SELECT * FROM clusters WHERE id=$1", id)
-	return cluster, err
+	if err != nil {
+		return nil, err
+	}
+	return &cluster, err
 }
 
 func (dao *ClusterDao) GetClusters(rc app.RequestContext) ([]models.Cluster, error) {

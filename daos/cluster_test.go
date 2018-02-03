@@ -50,8 +50,8 @@ var _ = AfterSuite(func() {
 var _ = Describe("Cluster", func() {
 
 	var (
-		cluster1 models.Cluster
-		cluster2 models.Cluster
+		cluster1 *models.Cluster
+		cluster2 *models.Cluster
 		clusters []models.Cluster
 		err      error
 		dao      ClusterDao
@@ -70,6 +70,9 @@ var _ = Describe("Cluster", func() {
 		rc.SetTx(tx)
 
 		tx.MustExec(searchpath)
+
+		cluster1 = &models.Cluster{Id: 1, Name: "cluster_1", Status: "provisioned"}
+		cluster2 = &models.Cluster{Id: 2, Name: "cluster_2", Status: "provisioned"}
 	})
 
 	AfterEach(func() {
@@ -82,8 +85,6 @@ var _ = Describe("Cluster", func() {
 	Describe("Retrieving all clusters", func() {
 		Context("When clusters exist", func() {
 			BeforeEach(func() {
-				cluster1 = models.Cluster{Id: 1, Name: "cluster_1", Status: "provisioned"}
-				cluster2 = models.Cluster{Id: 2, Name: "cluster_2", Status: "provisioned"}
 				rc.Tx().MustExec("INSERT INTO clusters (id, name, status) VALUES ($1, $2, $3)", cluster1.Id, cluster1.Name, cluster1.Status)
 				rc.Tx().MustExec("INSERT INTO clusters (id, name, status) VALUES ($1, $2, $3)", cluster2.Id, cluster2.Name, cluster2.Status)
 			})
@@ -109,7 +110,6 @@ var _ = Describe("Cluster", func() {
 	Describe("Retrieving a Cluster", func() {
 		Context("With an id of 1", func() {
 			BeforeEach(func() {
-				cluster1 = models.Cluster{Id: 1, Name: "cluster_1", Status: "provisioned"}
 				rc.Tx().MustExec("INSERT INTO clusters (id, name, status) VALUES ($1, $2, $3)", cluster1.Id, cluster1.Name, cluster1.Status)
 			})
 			It("Should return a cluster of the same id", func() {
@@ -121,8 +121,8 @@ var _ = Describe("Cluster", func() {
 			BeforeEach(func() {
 				cluster1, err = dao.GetCluster(rc, 1)
 			})
-			It("Should return an empty Cluster", func() {
-				Expect(cluster1).To(Equal(models.Cluster{}))
+			It("Should return nil", func() {
+				Expect(cluster1).Should(BeNil())
 			})
 			It("should error", func() {
 				Expect(err).Should(HaveOccurred())
