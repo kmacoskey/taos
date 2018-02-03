@@ -5,7 +5,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/kmacoskey/taos/app"
 	"github.com/kmacoskey/taos/handlers"
-	"github.com/kmacoskey/taos/middleware"
 	"net/http"
 )
 
@@ -32,19 +31,7 @@ func main() {
 	// Routing
 	router := mux.NewRouter()
 
-	router.Handle("/cluster/{id}", app.Adapt(
-		router,
-		handlers.GetCluster(),
-		middleware.Transactional(db),
-		app.WithRequestContext(),
-	)).Methods("GET")
-
-	router.Handle("/clusters", app.Adapt(
-		router,
-		handlers.GetClusters(),
-		middleware.Transactional(db),
-		app.WithRequestContext(),
-	)).Methods("GET")
+	handlers.ServeClusterResources(router, db)
 
 	// Start the server
 	http.ListenAndServe(":8080", router)

@@ -3,13 +3,29 @@ package handlers
 import (
 	"encoding/json"
 	"github.com/gorilla/mux"
+	"github.com/jmoiron/sqlx"
 	"github.com/kmacoskey/taos/app"
 	"github.com/kmacoskey/taos/daos"
+	"github.com/kmacoskey/taos/middleware"
+	"github.com/kmacoskey/taos/models"
 	"github.com/kmacoskey/taos/services"
 	log "github.com/sirupsen/logrus"
 	"net/http"
 	"strconv"
 )
+
+type clusterService interface {
+	GetCluster(rc app.RequestContext, id int) (*models.Cluster, error)
+	GetClusters(rc app.RequestContext) ([]models.Cluster, error)
+}
+
+type ClusterHandler struct {
+	cs clusterService
+}
+
+func NewClusterHandler(cs clusterService) *ClusterHandler {
+	return &ClusterHandler{cs}
+}
 
 // ClusterList represents a list of returned Clusters
 type ClusterList struct {
@@ -17,8 +33,27 @@ type ClusterList struct {
 	Clusters   interface{} `json:"clusters"`
 }
 
+func ServeClusterResources(router *mux.Router, db *sqlx.DB) {
+	h := NewClusterHandler(services.NewClusterService(daos.NewClusterDao()))
+
+	router.Handle("/cluster/{id}", app.Adapt(
+		router,
+		h.GetCluster(),
+		middleware.Transactional(db),
+		app.WithRequestContext(),
+	)).Methods("GET")
+
+	router.Handle("/clusters", app.Adapt(
+		router,
+		h.GetClusters(),
+		middleware.Transactional(db),
+		app.WithRequestContext(),
+	)).Methods("GET")
+
+}
+
 // Retrieve a single Cluster for a given id
-func GetCluster() app.Adapter {
+func (ch *ClusterHandler) GetCluster() app.Adapter {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			logger := log.WithFields(log.Fields{
@@ -35,8 +70,7 @@ func GetCluster() app.Adapter {
 				logger.Error("invalid cluster id in request")
 			}
 
-			clusterService := services.NewClusterService(daos.NewClusterDao())
-			cluster, err := clusterService.GetCluster(rc, id)
+			cluster, err := ch.cs.GetCluster(rc, id)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				logger.Error("could not retrieve cluster for given id in request")
@@ -55,7 +89,7 @@ func GetCluster() app.Adapter {
 }
 
 // Retrieve a ClusterList of all Clusters
-func GetClusters() app.Adapter {
+func (ch *ClusterHandler) GetClusters() app.Adapter {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			logger := log.WithFields(log.Fields{
@@ -65,8 +99,7 @@ func GetClusters() app.Adapter {
 
 			rc := app.GetRequestContext(r)
 
-			clusterService := services.NewClusterService(daos.NewClusterDao())
-			clusters, err := clusterService.GetClusters(rc)
+			clusters, err := ch.cs.GetClusters(rc)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				logger.Error("could not retrieve clusters")

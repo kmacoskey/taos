@@ -1,0 +1,8 @@
+mode: count
+github.com/kmacoskey/taos/daos/cluster.go:11.34,13.2 1 0
+github.com/kmacoskey/taos/daos/cluster.go:15.90,19.2 3 3
+github.com/kmacoskey/taos/daos/cluster.go:21.85,25.18 4 4
+github.com/kmacoskey/taos/daos/cluster.go:35.2,35.22 1 4
+github.com/kmacoskey/taos/daos/cluster.go:25.18,27.17 2 2
+github.com/kmacoskey/taos/daos/cluster.go:33.3,33.39 1 2
+github.com/kmacoskey/taos/daos/cluster.go:27.17,32.4 1 0

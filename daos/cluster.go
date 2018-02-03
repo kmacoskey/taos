@@ -21,7 +21,7 @@ func (dao *ClusterDao) GetCluster(rc app.RequestContext, id int) (models.Cluster
 func (dao *ClusterDao) GetClusters(rc app.RequestContext) ([]models.Cluster, error) {
 	clusters := []models.Cluster{}
 	cluster := models.Cluster{}
-	rows, err := rc.Tx().Queryx("SELECT * FROM clusters")
+	rows, err := rc.Tx().Queryx("SELECT * FROM clusters;")
 	for rows.Next() {
 		err := rows.StructScan(&cluster)
 		if err != nil {

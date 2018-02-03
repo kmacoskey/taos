@@ -1,6 +1,6 @@
 VERSION_TAG:=$(shell git describe --abbrev=0 --tags || echo "0.1")
 VERSION:=${VERSION}\#$(shell git log -n 1 --pretty=format:"%h")
-PACKAGES:=$(shell go list ./... | sed -n '1!p' | grep -v /vendor/)
+PACKAGES:=$(shell go list ./... | sed -n '1!p' | grep -v /vendor/ | sed 's!.*/!!')
 LDFLAGS:=-ldflags "-X github.com/kmacoskey/taos/app.Version=${VERSION}"
 
 default: build
@@ -9,10 +9,9 @@ depends:
 	../../../../bin/glide up
 
 test:
-	echo "mode: count" > coverage-all.out
+	set -x; \
 	$(foreach pkg,$(PACKAGES), \
-		go test -p=1 -cover -covermode=count -coverprofile=coverage.out ${pkg}; \
-		tail -n +2 coverage.out >> coverage-all.out;)
+		ginkgo -cover -covermode=count ${pkg};)
 
 cover: test
 	go tool cover -html=coverage-all.out

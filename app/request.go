@@ -19,7 +19,7 @@ var RequestContextKey string = "request"
 func WithRequestContext() Adapter {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			rc := newRequestContext(r.Context(), r)
+			rc := NewRequestContext(r.Context(), r)
 			ctx := context.WithValue(r.Context(), RequestContextKey, rc)
 			h.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -33,7 +33,7 @@ type RequestContext struct {
 	requestID   string
 }
 
-func newRequestContext(ctx context.Context, req *http.Request) RequestContext {
+func NewRequestContext(ctx context.Context, req *http.Request) RequestContext {
 	uuid := uuid.Must(uuid.NewRandom())
 
 	rc := RequestContext{
