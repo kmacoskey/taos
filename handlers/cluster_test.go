@@ -39,7 +39,7 @@ var _ = Describe("Cluster", func() {
 		response = httptest.NewRecorder()
 	})
 
-	Describe("Retrieving a Cluster for a specific id", func() {
+	Describe("Request to retrieve a Cluster for a specific id", func() {
 		Context("When that cluster exists", func() {
 			BeforeEach(func() {
 				// Unravel the middleware pattern to test only the Handler
@@ -95,7 +95,7 @@ var _ = Describe("Cluster", func() {
 		})
 	})
 
-	Describe("Retrieving all clusters", func() {
+	Describe("Request to retrieve all clusters", func() {
 		Context("When Clusters Exist", func() {
 			BeforeEach(func() {
 				// Create a ClusterList of valid Clusters

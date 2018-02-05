@@ -5,4 +5,4 @@ taos
 *.out
 .glide/
 vendor/
-*/*.coverprofile
+*.coverprofile
