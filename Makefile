@@ -9,9 +9,7 @@ depends:
 	../../../../bin/glide up
 
 test:
-	set -x; \
-	$(foreach pkg,$(PACKAGES), \
-		ginkgo -cover -covermode=count ${pkg};)
+	ginkgo -r
 
 cover: test
 	go tool cover -html=coverage-all.out
