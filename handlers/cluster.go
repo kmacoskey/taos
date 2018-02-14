@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"encoding/json"
+	"net/http"
+
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
 	"github.com/kmacoskey/taos/app"
@@ -10,13 +12,12 @@ import (
 	"github.com/kmacoskey/taos/models"
 	"github.com/kmacoskey/taos/services"
 	log "github.com/sirupsen/logrus"
-	"net/http"
-	"strconv"
 )
 
 type clusterService interface {
-	GetCluster(rc app.RequestContext, id int) (*models.Cluster, error)
+	GetCluster(rc app.RequestContext, id string) (*models.Cluster, error)
 	GetClusters(rc app.RequestContext) ([]models.Cluster, error)
+	CreateCluster(rc app.RequestContext) (*models.Cluster, error)
 }
 
 type ClusterHandler struct {
@@ -50,6 +51,44 @@ func ServeClusterResources(router *mux.Router, db *sqlx.DB) {
 		app.WithRequestContext(),
 	)).Methods("GET")
 
+	router.Handle("/cluster", app.Adapt(
+		router,
+		h.CreateCluster(),
+		middleware.Transactional(db),
+		app.WithRequestContext(),
+	)).Methods("PUT")
+
+}
+
+// Request provisioning of a new Cluster
+func (ch *ClusterHandler) CreateCluster() app.Adapter {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			logger := log.WithFields(log.Fields{
+				"topic":   "taos",
+				"package": "handlers",
+				"context": "cluster_handler",
+				"event":   "create_cluster",
+			})
+
+			rc := app.GetRequestContext(r)
+
+			cluster, err := ch.cs.CreateCluster(rc)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				logger.Error("could not create cluster")
+			}
+
+			js, err := json.Marshal(cluster)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				logger.Panic("failed to marshal cluster data for response")
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(js)
+		})
+	}
 }
 
 // Retrieve a single Cluster for a given id
@@ -66,11 +105,7 @@ func (ch *ClusterHandler) GetCluster() app.Adapter {
 			vars := mux.Vars(r)
 			rc := app.GetRequestContext(r)
 
-			id, err := strconv.Atoi(vars["id"])
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				logger.Error("invalid cluster id in request")
-			}
+			id := vars["id"]
 
 			cluster, err := ch.cs.GetCluster(rc, id)
 			if err != nil {

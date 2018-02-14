@@ -6,13 +6,14 @@ import (
 
 	"context"
 	"encoding/json"
+	"io/ioutil"
+	"net/http"
+	"net/http/httptest"
+
 	"github.com/gorilla/mux"
 	"github.com/kmacoskey/taos/app"
 	. "github.com/kmacoskey/taos/handlers"
 	"github.com/kmacoskey/taos/models"
-	"io/ioutil"
-	"net/http"
-	"net/http/httptest"
 )
 
 func emptyhandler(w http.ResponseWriter, r *http.Request) {}
@@ -31,15 +32,23 @@ var _ = Describe("Cluster", func() {
 	)
 
 	BeforeEach(func() {
-		cluster1 = &models.Cluster{Id: 1, Name: "cluster", Status: "status"}
-		cluster2 = &models.Cluster{Id: 2, Name: "cluster", Status: "status"}
+		cluster1 = &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
+		cluster2 = &models.Cluster{Id: "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
 		cluster1_json, err = json.Marshal(cluster1)
 		Expect(err).NotTo(HaveOccurred())
 
 		response = httptest.NewRecorder()
 	})
 
-	Describe("Request to retrieve a Cluster for a specific id", func() {
+	Describe("Create a cluster", func() {
+		Context("With valid Condig and no State", func() {
+			It("Should return a 200 OK", func() {
+
+			})
+		})
+	})
+
+	Describe("Get a Cluster for a specific id", func() {
 		Context("When that cluster exists", func() {
 			BeforeEach(func() {
 				// Unravel the middleware pattern to test only the Handler
@@ -95,7 +104,7 @@ var _ = Describe("Cluster", func() {
 		})
 	})
 
-	Describe("Request to retrieve all clusters", func() {
+	Describe("Get all clusters", func() {
 		Context("When Clusters Exist", func() {
 			BeforeEach(func() {
 				// Create a ClusterList of valid Clusters
@@ -177,14 +186,18 @@ func NewValidClusterService() *ValidClusterService {
 	return &ValidClusterService{}
 }
 
-func (cs *ValidClusterService) GetCluster(rc app.RequestContext, id int) (*models.Cluster, error) {
-	return &models.Cluster{Id: 1, Name: "cluster", Status: "status"}, nil
+func (cs *ValidClusterService) CreateCluster(rc app.RequestContext) (*models.Cluster, error) {
+	return &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}, nil
+}
+
+func (cs *ValidClusterService) GetCluster(rc app.RequestContext, id string) (*models.Cluster, error) {
+	return &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}, nil
 }
 
 func (cs *ValidClusterService) GetClusters(rc app.RequestContext) ([]models.Cluster, error) {
 	clusters := []models.Cluster{}
-	cluster1 := models.Cluster{Id: 1, Name: "cluster", Status: "status"}
-	cluster2 := models.Cluster{Id: 2, Name: "cluster", Status: "status"}
+	cluster1 := models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
+	cluster2 := models.Cluster{Id: "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
 	clusters = append(clusters, cluster1)
 	clusters = append(clusters, cluster2)
 	return clusters, nil
@@ -199,7 +212,11 @@ func NewEmptyClusterService() *EmptyClusterService {
 	return &EmptyClusterService{}
 }
 
-func (cs *EmptyClusterService) GetCluster(rc app.RequestContext, id int) (*models.Cluster, error) {
+func (cs *EmptyClusterService) CreateCluster(rc app.RequestContext) (*models.Cluster, error) {
+	return nil, nil
+}
+
+func (cs *EmptyClusterService) GetCluster(rc app.RequestContext, id string) (*models.Cluster, error) {
 	return nil, nil
 }
 

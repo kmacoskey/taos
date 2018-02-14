@@ -5,6 +5,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"errors"
+
 	"github.com/kmacoskey/taos/app"
 	"github.com/kmacoskey/taos/models"
 	. "github.com/kmacoskey/taos/services"
@@ -13,6 +14,7 @@ import (
 var _ = Describe("Cluster", func() {
 
 	var (
+		cluster  *models.Cluster
 		cluster1 *models.Cluster
 		cluster2 *models.Cluster
 		clusters []models.Cluster
@@ -25,9 +27,69 @@ var _ = Describe("Cluster", func() {
 		// Create a new RequestContext for each test
 		rc = app.RequestContext{}
 
-		cluster1 = &models.Cluster{Id: 1, Name: "cluster", Status: "status"}
-		cluster2 = &models.Cluster{Id: 2, Name: "cluster", Status: "status"}
+		cluster1 = &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
+		cluster2 = &models.Cluster{Id: "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
 	})
+
+	// ======================================================================
+	//                      _
+	//   ___ _ __ ___  __ _| |_ ___
+	//  / __| '__/ _ \/ _` | __/ _ \
+	// | (__| | |  __/ (_| | ||  __/
+	//  \___|_|  \___|\__,_|\__\___|
+	//
+	// ======================================================================
+
+	Describe("Creating a Cluster", func() {
+		Context("A cluster is returned from the dao", func() {
+			BeforeEach(func() {
+				cs = NewClusterService(NewValidClusterDao())
+				cluster, err = cs.CreateCluster(rc)
+			})
+			It("Should not error", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+			It("Should return a cluster", func() {
+				Expect(cluster).NotTo(BeNil())
+			})
+			It("Should have a cluster returned with status provisioning", func() {
+				Expect(cluster.Status).To(Equal("provisioning"))
+			})
+			It("Should set the cluster status in the daos", func() {
+				Expect(cluster.Status).To(Equal("provisioning"))
+			})
+			It("Should eventually be provisioned", func() {
+				Eventually(func() string {
+					c, err := cs.GetCluster(rc, cluster.Id)
+					Expect(err).NotTo(HaveOccurred())
+					return c.Status
+				}, 5, 1).Should(Equal("provisioned"))
+			})
+		})
+
+		Context("A cluster is not returned from the dao", func() {
+			BeforeEach(func() {
+				cs = NewClusterService(NewEmptyClusterDao())
+				cluster, err = cs.CreateCluster(rc)
+			})
+			It("Should return an empty Cluster", func() {
+				Expect(cluster).To(Equal(&models.Cluster{}))
+			})
+			It("should error", func() {
+				Expect(err).Should(HaveOccurred())
+			})
+		})
+	})
+
+	// ======================================================================
+	//             _
+	//   __ _  ___| |_
+	//  / _` |/ _ \ __|
+	// | (_| |  __/ |_
+	//  \__, |\___|\__|
+	//  |___/
+	//
+	// ======================================================================
 
 	Describe("Retrieving a Cluster for a specific id", func() {
 		Context("A cluster is returned from the dao", func() {
@@ -35,14 +97,14 @@ var _ = Describe("Cluster", func() {
 				cs = NewClusterService(NewValidClusterDao())
 			})
 			It("Should return a cluster of the same id", func() {
-				Expect(cs.GetCluster(rc, 1)).To(Equal(cluster1))
+				Expect(cs.GetCluster(rc, "a19e2758-0ec5-11e8-ba89-0ed5f89f718b")).To(Equal(cluster1))
 			})
 		})
 
 		Context("A cluster is not returned from the dao", func() {
 			BeforeEach(func() {
 				cs = NewClusterService(NewEmptyClusterDao())
-				cluster1, err = cs.GetCluster(rc, 1)
+				cluster1, err = cs.GetCluster(rc, "a19e2758-0ec5-11e8-ba89-0ed5f89f718b")
 			})
 			It("Should return an empty Cluster", func() {
 				Expect(cluster1).To(Equal(&models.Cluster{}))
@@ -52,6 +114,16 @@ var _ = Describe("Cluster", func() {
 			})
 		})
 	})
+
+	// ======================================================================
+	//             _
+	//   __ _  ___| |_ ___
+	//  / _` |/ _ \ __/ __|
+	// | (_| |  __/ |_\__ \
+	//  \__, |\___|\__|___/
+	//  |___/
+	//
+	// ======================================================================
 
 	Describe("Retrieving all clusters", func() {
 		Context("When Clusters are returned from the dao", func() {
@@ -86,8 +158,12 @@ func NewValidClusterDao() *ValidClusterDao {
 	return &ValidClusterDao{}
 }
 
-func (dao *ValidClusterDao) GetCluster(rc app.RequestContext, id int) (*models.Cluster, error) {
-	return &models.Cluster{Id: 1, Name: "cluster", Status: "status"}, nil
+func (dao *ValidClusterDao) CreateCluster(rc app.RequestContext) (*models.Cluster, error) {
+	return &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}, nil
+}
+
+func (dao *ValidClusterDao) GetCluster(rc app.RequestContext, id string) (*models.Cluster, error) {
+	return &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}, nil
 }
 
 func (dao *ValidClusterDao) GetClusters(rc app.RequestContext) ([]models.Cluster, error) {
@@ -104,7 +180,11 @@ func NewEmptyClusterDao() *EmptyClusterDao {
 	return &EmptyClusterDao{}
 }
 
-func (dao *EmptyClusterDao) GetCluster(rc app.RequestContext, id int) (*models.Cluster, error) {
+func (dao *EmptyClusterDao) CreateCluster(rc app.RequestContext) (*models.Cluster, error) {
+	return &models.Cluster{}, errors.New("foo")
+}
+
+func (dao *EmptyClusterDao) GetCluster(rc app.RequestContext, id string) (*models.Cluster, error) {
 	return &models.Cluster{}, errors.New("foo")
 }
 
