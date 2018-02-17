@@ -6,7 +6,7 @@ import (
 	"regexp"
 
 	sillyname "github.com/Pallinder/sillyname-go"
-	"github.com/kmacoskey/taos/app"
+	"github.com/jmoiron/sqlx"
 	"github.com/kmacoskey/taos/models"
 	log "github.com/sirupsen/logrus"
 )
@@ -25,7 +25,7 @@ func NewClusterDao() *ClusterDao {
 	return &ClusterDao{}
 }
 
-func (dao *ClusterDao) CreateCluster(rc app.RequestContext) (*models.Cluster, error) {
+func (dao *ClusterDao) CreateCluster(tx *sqlx.Tx) (*models.Cluster, error) {
 	logger := log.WithFields(log.Fields{
 		"topic":   "taos",
 		"package": "daos",
@@ -39,7 +39,7 @@ func (dao *ClusterDao) CreateCluster(rc app.RequestContext) (*models.Cluster, er
 	}
 
 	var id string
-	rows, err := rc.Tx().NamedQuery(`INSERT INTO clusters (name,status) VALUES (:name,:status) RETURNING id`, cluster)
+	rows, err := tx.NamedQuery(`INSERT INTO clusters (name,status) VALUES (:name,:status) RETURNING id`, cluster)
 	if err == nil {
 		if rows.Next() {
 			rows.Scan(&id)
@@ -53,7 +53,7 @@ func (dao *ClusterDao) CreateCluster(rc app.RequestContext) (*models.Cluster, er
 
 }
 
-func (dao *ClusterDao) UpdateCluster(rc app.RequestContext, cluster *models.Cluster) (*models.Cluster, error) {
+func (dao *ClusterDao) UpdateCluster(tx *sqlx.Tx, cluster *models.Cluster) (*models.Cluster, error) {
 	logger := log.WithFields(log.Fields{
 		"topic":   "taos",
 		"package": "daos",
@@ -61,7 +61,7 @@ func (dao *ClusterDao) UpdateCluster(rc app.RequestContext, cluster *models.Clus
 		"event":   "update_cluster",
 	})
 
-	res, err := rc.Tx().Exec(`UPDATE clusters SET name = $2, status = $3 WHERE id = $1`, &cluster.Id, &cluster.Name, &cluster.Status)
+	res, err := tx.Exec(`UPDATE clusters SET name = $2, status = $3 WHERE id = $1`, &cluster.Id, &cluster.Name, &cluster.Status)
 	if err != nil {
 		logger.Debug(fmt.Sprintf("could not update cluster '%s'", err.Error()))
 		return nil, err
@@ -81,7 +81,7 @@ func (dao *ClusterDao) UpdateCluster(rc app.RequestContext, cluster *models.Clus
 	return cluster, nil
 }
 
-func (dao *ClusterDao) GetCluster(rc app.RequestContext, id string) (*models.Cluster, error) {
+func (dao *ClusterDao) GetCluster(tx *sqlx.Tx, id string) (*models.Cluster, error) {
 	logger := log.WithFields(log.Fields{
 		"topic":   "taos",
 		"package": "daos",
@@ -91,7 +91,7 @@ func (dao *ClusterDao) GetCluster(rc app.RequestContext, id string) (*models.Clu
 
 	cluster := models.Cluster{}
 
-	err := rc.Tx().Get(&cluster, "SELECT * FROM clusters WHERE id=$1", id)
+	err := tx.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", id)
 	if err == nil {
 		return &cluster, nil
 	}
@@ -107,7 +107,7 @@ func (dao *ClusterDao) GetCluster(rc app.RequestContext, id string) (*models.Clu
 	}
 }
 
-func (dao *ClusterDao) GetClusters(rc app.RequestContext) ([]models.Cluster, error) {
+func (dao *ClusterDao) GetClusters(tx *sqlx.Tx) ([]models.Cluster, error) {
 	logger := log.WithFields(log.Fields{
 		"topic":   "taos",
 		"package": "daos",
@@ -118,7 +118,7 @@ func (dao *ClusterDao) GetClusters(rc app.RequestContext) ([]models.Cluster, err
 	clusters := []models.Cluster{}
 	cluster := models.Cluster{}
 
-	rows, err := rc.Tx().Queryx("SELECT * FROM clusters")
+	rows, err := tx.Queryx("SELECT * FROM clusters")
 
 	if err == nil {
 		for rows.Next() {
