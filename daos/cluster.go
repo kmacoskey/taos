@@ -25,7 +25,7 @@ func NewClusterDao() *ClusterDao {
 	return &ClusterDao{}
 }
 
-func (dao *ClusterDao) CreateCluster(tx *sqlx.Tx) (*models.Cluster, error) {
+func (dao *ClusterDao) CreateCluster(db *sqlx.DB) (*models.Cluster, error) {
 	logger := log.WithFields(log.Fields{
 		"topic":   "taos",
 		"package": "daos",
@@ -39,21 +39,34 @@ func (dao *ClusterDao) CreateCluster(tx *sqlx.Tx) (*models.Cluster, error) {
 	}
 
 	var id string
+
+	tx, err := db.Beginx()
+	if err != nil {
+		logger.Panic("Could not create transaction")
+	}
+	logger.Debug("transaction created")
+
 	rows, err := tx.NamedQuery(`INSERT INTO clusters (name,status) VALUES (:name,:status) RETURNING id`, cluster)
 	if err == nil {
 		if rows.Next() {
 			rows.Scan(&id)
 		}
 		cluster.Id = id
+
+		tx.Commit()
+		logger.Debug("transaction commited")
+
 		return &cluster, nil
 	} else {
+		tx.Rollback()
+		logger.Debug("transaction rolledback")
 		logger.Debug(fmt.Sprintf("could not create cluster '%s'", err.Error()))
 		return nil, err
 	}
 
 }
 
-func (dao *ClusterDao) UpdateCluster(tx *sqlx.Tx, cluster *models.Cluster) (*models.Cluster, error) {
+func (dao *ClusterDao) UpdateCluster(db *sqlx.DB, cluster *models.Cluster) (*models.Cluster, error) {
 	logger := log.WithFields(log.Fields{
 		"topic":   "taos",
 		"package": "daos",
@@ -61,27 +74,42 @@ func (dao *ClusterDao) UpdateCluster(tx *sqlx.Tx, cluster *models.Cluster) (*mod
 		"event":   "update_cluster",
 	})
 
+	tx, err := db.Beginx()
+	if err != nil {
+		logger.Panic("Could not create transaction")
+	}
+	logger.Debug("transaction created")
+
 	res, err := tx.Exec(`UPDATE clusters SET name = $2, status = $3 WHERE id = $1`, &cluster.Id, &cluster.Name, &cluster.Status)
 	if err != nil {
+		tx.Rollback()
+		logger.Debug("transaction rolledback")
 		logger.Debug(fmt.Sprintf("could not update cluster '%s'", err.Error()))
 		return nil, err
 	}
 
 	count, err := res.RowsAffected()
 	if err != nil {
+		tx.Rollback()
+		logger.Debug("transaction rolledback")
 		logger.Debug(fmt.Sprintf("could not update cluster '%s'", err.Error()))
 		return nil, err
 	}
 
 	if count != 1 {
+		tx.Rollback()
+		logger.Debug("transaction rolledback")
 		logger.Debug("no clusters updated")
 		return nil, errors.New("no clusters updated")
 	}
 
+	tx.Commit()
+	logger.Debug("transaction commited")
+
 	return cluster, nil
 }
 
-func (dao *ClusterDao) GetCluster(tx *sqlx.Tx, id string) (*models.Cluster, error) {
+func (dao *ClusterDao) GetCluster(db *sqlx.DB, id string) (*models.Cluster, error) {
 	logger := log.WithFields(log.Fields{
 		"topic":   "taos",
 		"package": "daos",
@@ -91,10 +119,21 @@ func (dao *ClusterDao) GetCluster(tx *sqlx.Tx, id string) (*models.Cluster, erro
 
 	cluster := models.Cluster{}
 
-	err := tx.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", id)
+	tx, err := db.Beginx()
+	if err != nil {
+		logger.Panic("Could not create transaction")
+	}
+	logger.Debug("transaction created")
+
+	err = tx.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", id)
 	if err == nil {
+		tx.Commit()
+		logger.Debug("transaction commited")
 		return &cluster, nil
 	}
+
+	tx.Rollback()
+	logger.Debug("transaction rolledback")
 
 	switch {
 	case noRelation.MatchString(err.Error()):
@@ -107,7 +146,7 @@ func (dao *ClusterDao) GetCluster(tx *sqlx.Tx, id string) (*models.Cluster, erro
 	}
 }
 
-func (dao *ClusterDao) GetClusters(tx *sqlx.Tx) ([]models.Cluster, error) {
+func (dao *ClusterDao) GetClusters(db *sqlx.DB) ([]models.Cluster, error) {
 	logger := log.WithFields(log.Fields{
 		"topic":   "taos",
 		"package": "daos",
@@ -117,6 +156,12 @@ func (dao *ClusterDao) GetClusters(tx *sqlx.Tx) ([]models.Cluster, error) {
 
 	clusters := []models.Cluster{}
 	cluster := models.Cluster{}
+
+	tx, err := db.Beginx()
+	if err != nil {
+		logger.Panic("Could not create transaction")
+	}
+	logger.Debug("transaction created")
 
 	rows, err := tx.Queryx("SELECT * FROM clusters")
 
@@ -128,9 +173,13 @@ func (dao *ClusterDao) GetClusters(tx *sqlx.Tx) ([]models.Cluster, error) {
 			}
 			clusters = append(clusters, cluster)
 		}
+		tx.Commit()
+		logger.Debug("transaction commited")
 
 		return clusters, nil
 	} else {
+		tx.Rollback()
+		logger.Debug("transaction rolledback")
 		switch {
 		case noRelation.MatchString(err.Error()):
 			logger.Debug(err)

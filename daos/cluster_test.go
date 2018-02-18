@@ -90,9 +90,7 @@ var _ = Describe("Cluster", func() {
 					Status: "different_status",
 					Name:   cluster1.Name,
 				}
-				cluster, err = dao.UpdateCluster(tx, new_cluster)
-				// Must commit the transaction in order to test that it completed
-				tx.Commit()
+				cluster, err = dao.UpdateCluster(db, new_cluster)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -107,8 +105,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("When changing the cluster status for a non-existing cluster", func() {
 			BeforeEach(func() {
-				cluster, err = dao.UpdateCluster(tx, notacluster)
-				tx.Commit()
+				cluster, err = dao.UpdateCluster(db, notacluster)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -120,8 +117,7 @@ var _ = Describe("Cluster", func() {
 	Describe("Creating cluster", func() {
 		Context("When a cluster is successfully created", func() {
 			BeforeEach(func() {
-				cluster, err = dao.CreateCluster(tx)
-				tx.Commit()
+				cluster, err = dao.CreateCluster(db)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -144,8 +140,7 @@ var _ = Describe("Cluster", func() {
 				if rows.Next() {
 					rows.Scan(&clusterId)
 				}
-				cluster, err = dao.GetCluster(tx, clusterId)
-				tx.Commit()
+				cluster, err = dao.GetCluster(db, clusterId)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -157,8 +152,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("That does not exist", func() {
 			BeforeEach(func() {
-				cluster1, err = dao.GetCluster(tx, "596abbac-0ed1-11e8-ba89-0ed5f89f718b")
-				tx.Commit()
+				cluster1, err = dao.GetCluster(db, "596abbac-0ed1-11e8-ba89-0ed5f89f718b")
 			})
 			It("Should return a nil cluster", func() {
 				Expect(cluster1).Should(BeNil())
@@ -175,8 +169,7 @@ var _ = Describe("Cluster", func() {
 			BeforeEach(func() {
 				db.MustExec("INSERT INTO clusters (id, name, status) VALUES ($1, $2, $3)", cluster1.Id, cluster1.Name, cluster1.Status)
 				db.MustExec("INSERT INTO clusters (id, name, status) VALUES ($1, $2, $3)", cluster2.Id, cluster2.Name, cluster2.Status)
-				clusters, err = dao.GetClusters(tx)
-				tx.Commit()
+				clusters, err = dao.GetClusters(db)
 			})
 			It("Should return clusters", func() {
 				Expect(clusters).To(HaveLen(2))
@@ -185,8 +178,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("When clusters do not exist", func() {
 			BeforeEach(func() {
-				clusters, err = dao.GetClusters(tx)
-				tx.Commit()
+				clusters, err = dao.GetClusters(db)
 			})
 			It("Should return an empty list of Clusters", func() {
 				Expect(clusters).To(HaveLen(0))
