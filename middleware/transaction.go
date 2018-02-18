@@ -2,10 +2,11 @@ package middleware
 
 import (
 	"context"
+	"net/http"
+
 	"github.com/jmoiron/sqlx"
 	"github.com/kmacoskey/taos/app"
 	log "github.com/sirupsen/logrus"
-	"net/http"
 )
 
 func Transactional(db *sqlx.DB) app.Adapter {

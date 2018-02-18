@@ -3,36 +3,39 @@ package services
 import (
 	"fmt"
 
+	"github.com/jmoiron/sqlx"
 	"github.com/kmacoskey/taos/app"
 	"github.com/kmacoskey/taos/models"
 	"github.com/kmacoskey/taos/terraform"
 )
 
 type clusterDao interface {
-	GetCluster(rc app.RequestContext, id string) (*models.Cluster, error)
-	GetClusters(rc app.RequestContext) ([]models.Cluster, error)
-	CreateCluster(rc app.RequestContext) (*models.Cluster, error)
+	GetCluster(db *sqlx.DB, id string) (*models.Cluster, error)
+	GetClusters(db *sqlx.DB) ([]models.Cluster, error)
+	CreateCluster(db *sqlx.DB) (*models.Cluster, error)
+	UpdateCluster(db *sqlx.DB, cluster *models.Cluster) (*models.Cluster, error)
 }
 
 type ClusterService struct {
 	dao clusterDao
+	db  *sqlx.DB
 }
 
-func NewClusterService(dao clusterDao) *ClusterService {
-	return &ClusterService{dao}
+func NewClusterService(dao clusterDao, db *sqlx.DB) *ClusterService {
+	return &ClusterService{dao, db}
 }
 
 func (s *ClusterService) GetCluster(rc app.RequestContext, id string) (*models.Cluster, error) {
-	cluster, err := s.dao.GetCluster(rc, id)
+	cluster, err := s.dao.GetCluster(s.db, id)
 	return cluster, err
 }
 
 func (s *ClusterService) GetClusters(rc app.RequestContext) ([]models.Cluster, error) {
-	clusters, err := s.dao.GetClusters(rc)
+	clusters, err := s.dao.GetClusters(s.db)
 	return clusters, err
 }
 
-func (s *ClusterService) ProvisionCluster(*models.Cluster) {
+func (s *ClusterService) ProvisionCluster(c *models.Cluster) {
 	vtc := []byte(`{"provider":{"google":{}}}`)
 	t := &terraform.Terraform{
 		Config: vtc,
@@ -57,16 +60,18 @@ func (s *ClusterService) ProvisionCluster(*models.Cluster) {
 		fmt.Println(err)
 	}
 
+	if err == nil {
+		c.Status = "provisioned"
+		_, err := s.dao.UpdateCluster(s.db, c)
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+
 }
 
-/*
- * func (s *ClusterService) SetClusterStatus(id, status string) error {
- *
- * }
- */
-
 func (s *ClusterService) CreateCluster(rc app.RequestContext) (*models.Cluster, error) {
-	cluster, err := s.dao.CreateCluster(rc)
+	cluster, err := s.dao.CreateCluster(s.db)
 	if err != nil {
 		return cluster, err
 	}
