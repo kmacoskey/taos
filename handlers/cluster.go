@@ -8,7 +8,6 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/kmacoskey/taos/app"
 	"github.com/kmacoskey/taos/daos"
-	"github.com/kmacoskey/taos/middleware"
 	"github.com/kmacoskey/taos/models"
 	"github.com/kmacoskey/taos/services"
 	log "github.com/sirupsen/logrus"
@@ -35,26 +34,23 @@ type ClusterList struct {
 }
 
 func ServeClusterResources(router *mux.Router, db *sqlx.DB) {
-	h := NewClusterHandler(services.NewClusterService(daos.NewClusterDao()))
+	h := NewClusterHandler(services.NewClusterService(daos.NewClusterDao(), db))
 
 	router.Handle("/cluster/{id}", app.Adapt(
 		router,
 		h.GetCluster(),
-		middleware.Transactional(db),
 		app.WithRequestContext(),
 	)).Methods("GET")
 
 	router.Handle("/clusters", app.Adapt(
 		router,
 		h.GetClusters(),
-		middleware.Transactional(db),
 		app.WithRequestContext(),
 	)).Methods("GET")
 
 	router.Handle("/cluster", app.Adapt(
 		router,
 		h.CreateCluster(),
-		middleware.Transactional(db),
 		app.WithRequestContext(),
 	)).Methods("PUT")
 
