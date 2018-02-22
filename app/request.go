@@ -2,11 +2,12 @@ package app
 
 import (
 	"context"
+	"net/http"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
-	"net/http"
-	"time"
 )
 
 // The RequestContext is passed as an *http.Request WithValue() for
@@ -35,10 +36,11 @@ func WithRequestContext() Adapter {
 }
 
 type RequestContext struct {
-	tx          *sqlx.Tx
-	rollback    bool
-	requestTime time.Time
-	requestID   string
+	tx              *sqlx.Tx
+	terraformConfig []byte
+	rollback        bool
+	requestTime     time.Time
+	requestID       string
 }
 
 func NewRequestContext(ctx context.Context, req *http.Request) RequestContext {
@@ -62,6 +64,14 @@ func (rs *RequestContext) Tx() *sqlx.Tx {
 
 func (rs *RequestContext) SetTx(tx *sqlx.Tx) {
 	rs.tx = tx
+}
+
+func (rs *RequestContext) TerraformConfig() []byte {
+	return rs.terraformConfig
+}
+
+func (rs *RequestContext) SetTerraformConfig(tfcfg []byte) {
+	rs.terraformConfig = tfcfg
 }
 
 func (rs *RequestContext) Rollback() bool {

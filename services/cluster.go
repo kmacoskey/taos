@@ -35,10 +35,10 @@ func (s *ClusterService) GetClusters(rc app.RequestContext) ([]models.Cluster, e
 	return clusters, err
 }
 
-func (s *ClusterService) ProvisionCluster(c *models.Cluster) {
-	vtc := []byte(`{"provider":{"google":{}}}`)
+func (s *ClusterService) ProvisionCluster(c *models.Cluster, config []byte) {
+
 	t := &terraform.Terraform{
-		Config: vtc,
+		Config: config,
 	}
 
 	tc := terraform.Client{
@@ -47,25 +47,41 @@ func (s *ClusterService) ProvisionCluster(c *models.Cluster) {
 
 	err := tc.ClientInit()
 	if err != nil {
-		fmt.Println(err)
-	}
-
-	err = tc.Apply()
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	err = tc.ClientDestroy()
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	if err == nil {
-		c.Status = "provisioned"
+		c.Status = "provision_failed"
 		_, err := s.dao.UpdateCluster(s.db, c)
 		if err != nil {
 			fmt.Println(err)
 		}
+		return
+	}
+
+	err = tc.Apply()
+	if err != nil {
+		c.Status = "provision_failed"
+		_, err := s.dao.UpdateCluster(s.db, c)
+		if err != nil {
+			fmt.Println(err)
+		}
+		return
+	}
+
+	err = tc.ClientDestroy()
+	if err != nil {
+		c.Status = "provision_failed"
+		_, err := s.dao.UpdateCluster(s.db, c)
+		if err != nil {
+			fmt.Println(err)
+		}
+		return
+	}
+
+	if err == nil {
+		c.Status = "provision_success"
+		_, err := s.dao.UpdateCluster(s.db, c)
+		if err != nil {
+			fmt.Println(err)
+		}
+		return
 	}
 
 }
@@ -76,7 +92,7 @@ func (s *ClusterService) CreateCluster(rc app.RequestContext) (*models.Cluster, 
 		return cluster, err
 	}
 
-	go s.ProvisionCluster(cluster)
+	go s.ProvisionCluster(cluster, rc.TerraformConfig())
 
 	cluster.Status = "provisioning"
 

@@ -19,18 +19,23 @@ var clustersMap map[string]*models.Cluster
 var _ = Describe("Cluster", func() {
 
 	var (
-		cluster  *models.Cluster
-		cluster1 *models.Cluster
-		cluster2 *models.Cluster
-		clusters []models.Cluster
-		cs       *ClusterService
-		rc       app.RequestContext
-		err      error
+		cluster                *models.Cluster
+		cluster1               *models.Cluster
+		cluster2               *models.Cluster
+		clusters               []models.Cluster
+		cs                     *ClusterService
+		rc                     app.RequestContext
+		err                    error
+		validTerraformConfig   []byte
+		invalidTerraformConfig []byte
 	)
 
 	BeforeEach(func() {
 		// Create a new RequestContext for each test
 		rc = app.RequestContext{}
+
+		validTerraformConfig = []byte(`{"provider":{"google":{}}}`)
+		invalidTerraformConfig = []byte(`notjson`)
 
 		cluster1 = &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
 		cluster2 = &models.Cluster{Id: "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
@@ -49,10 +54,31 @@ var _ = Describe("Cluster", func() {
 	//
 	// ======================================================================
 
-	Describe("Creating a Cluster", func() {
+	Describe("Creating an Invalid Cluster", func() {
+		Context("Invalid terraform config is used", func() {
+			JustBeforeEach(func() {
+				cs = NewClusterService(NewValidClusterDao(), NewMockDB().db)
+				rc.SetTerraformConfig(invalidTerraformConfig)
+				cluster, err = cs.CreateCluster(rc)
+			})
+			It("Should not return an error when requested", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+			It("Should eventually change status", func() {
+				Eventually(func() string {
+					c, err := cs.GetCluster(rc, cluster.Id)
+					Expect(err).NotTo(HaveOccurred())
+					return c.Status
+				}, 2, 0.5).Should(Equal("provision_failed"))
+			})
+		})
+	})
+
+	Describe("Creating a Valid Cluster", func() {
 		Context("A cluster is returned from the dao", func() {
 			BeforeEach(func() {
 				cs = NewClusterService(NewValidClusterDao(), NewMockDB().db)
+				rc.SetTerraformConfig(validTerraformConfig)
 				cluster, err = cs.CreateCluster(rc)
 			})
 			It("Should not error", func() {
@@ -72,7 +98,7 @@ var _ = Describe("Cluster", func() {
 					c, err := cs.GetCluster(rc, cluster.Id)
 					Expect(err).NotTo(HaveOccurred())
 					return c.Status
-				}, 2, 0.5).Should(Equal("provisioned"))
+				}, 2, 0.5).Should(Equal("provision_success"))
 			})
 		})
 
