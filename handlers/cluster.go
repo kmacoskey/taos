@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -74,6 +75,9 @@ func (ch *ClusterHandler) CreateCluster() app.Adapter {
 			})
 
 			rc := app.GetRequestContext(r)
+
+			body, _ := ioutil.ReadAll(r.Body)
+			rc.SetTerraformConfig(body)
 
 			cluster, err := ch.cs.CreateCluster(rc)
 			if err != nil {

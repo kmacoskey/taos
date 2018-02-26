@@ -1,6 +1,8 @@
 package handlers_test
 
 import (
+	"bytes"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -23,17 +25,17 @@ func emptyhandler(w http.ResponseWriter, r *http.Request) {}
 var _ = Describe("Cluster", func() {
 
 	var (
-		cluster1	                *models.Cluster
-		cluster2                	*models.Cluster
-		cluster1_json           []byte
-		cluster_list_json       []byte
-		empty_cluster_list_json []byte
-		empty_body_json		[]byte
-		cluster1_not_found_error	string
-		cluster1_could_not_delete_error	string
-		response                *httptest.ResponseRecorder
-		err                     error
-		resp                    *http.Response
+		cluster1                        *models.Cluster
+		cluster2                        *models.Cluster
+		cluster1_json                   []byte
+		cluster_list_json               []byte
+		empty_cluster_list_json         []byte
+		empty_body_json                 []byte
+		cluster1_not_found_error        string
+		cluster1_could_not_delete_error string
+		response                        *httptest.ResponseRecorder
+		err                             error
+		resp                            *http.Response
 	)
 
 	BeforeEach(func() {
@@ -47,13 +49,50 @@ var _ = Describe("Cluster", func() {
 		response = httptest.NewRecorder()
 	})
 
-	Describe("Create a cluster", func() {
-		Context("With valid Condig and no State", func() {
-			It("Should return a 200 OK", func() {
+	// ======================================================================
+	//                      _
+	//   ___ _ __ ___  __ _| |_ ___
+	//  / __| '__/ _ \/ _` | __/ _ \
+	// | (__| | |  __/ (_| | ||  __/
+	//  \___|_|  \___|\__,_|\__\___|
+	//
+	// ======================================================================
 
+	Describe("Create a cluster", func() {
+		Context("With valid Config", func() {
+			BeforeEach(func() {
+				// Unravel the middleware pattern to test only the Handler
+				ch := NewClusterHandler(NewValidClusterService())
+				adapter := ch.GetCluster()
+				handler := adapter(http.HandlerFunc(emptyhandler))
+
+				var jsonStr = []byte(`{"title":"Buy cheese and bread for breakfast."}`)
+				request := httptest.NewRequest("POST", "/cluster", bytes.NewBuffer(jsonStr))
+				request.Header.Set("Content-Type", "application/json")
+
+				// Create a new request with the expected, but empty, request.Context
+				requestContext := app.NewRequestContext(request.Context(), request)
+				ctx := context.WithValue(request.Context(), "request", requestContext)
+
+				// Create a server to get receive a response for the given request
+				handler.ServeHTTP(response, request.WithContext(ctx))
+				resp = response.Result()
+			})
+			It("Should return a 200 OK", func() {
+				Expect(resp.StatusCode).To(Equal(http.StatusOK))
 			})
 		})
 	})
+
+	// ======================================================================
+	//             _
+	//   __ _  ___| |_
+	//  / _` |/ _ \ __|
+	// | (_| |  __/ |_
+	//  \__, |\___|\__|
+	//  |___/
+	//
+	// ======================================================================
 
 	Describe("Get a Cluster for a specific id", func() {
 		Context("When that cluster exists", func() {
@@ -63,9 +102,9 @@ var _ = Describe("Cluster", func() {
 				adapter := ch.GetCluster()
 				handler := adapter(http.HandlerFunc(emptyhandler))
 
-				// Create a new request with the expected, but empty, request.Context
 				request := httptest.NewRequest("GET", "/cluster/id", nil)
 				request = mux.SetURLVars(request, map[string]string{"id": "1"})
+				// Create a new request with the expected, but empty, request.Context
 				requestContext := app.NewRequestContext(request.Context(), request)
 				ctx := context.WithValue(request.Context(), "request", requestContext)
 
@@ -91,7 +130,6 @@ var _ = Describe("Cluster", func() {
 				adapter := ch.GetCluster()
 				handler := adapter(http.HandlerFunc(emptyhandler))
 
-				// Create a new request with the expected, but empty, request.Context
 				request := httptest.NewRequest("GET", "/cluster/id", nil)
 				request = mux.SetURLVars(request, map[string]string{"id": cluster1.Id})
 				requestContext := app.NewRequestContext(request.Context(), request)
@@ -111,6 +149,16 @@ var _ = Describe("Cluster", func() {
 		})
 	})
 
+	// ======================================================================
+	//             _
+	//   __ _  ___| |_ ___
+	//  / _` |/ _ \ __/ __|
+	// | (_| |  __/ |_\__ \
+	//  \__, |\___|\__|___/
+	//  |___/
+	//
+	// ======================================================================
+
 	Describe("Get all clusters", func() {
 		Context("When Clusters Exist", func() {
 			BeforeEach(func() {
@@ -127,8 +175,8 @@ var _ = Describe("Cluster", func() {
 				adapter := ch.GetClusters()
 				handler := adapter(http.HandlerFunc(emptyhandler))
 
-				// Create a new request with the expected, but empty, request.Context
 				request := httptest.NewRequest("GET", "/clusters", nil)
+				// Create a new request with the expected, but empty, request.Context
 				requestContext := app.NewRequestContext(request.Context(), request)
 				ctx := context.WithValue(request.Context(), "request", requestContext)
 
@@ -160,8 +208,8 @@ var _ = Describe("Cluster", func() {
 				adapter := ch.GetClusters()
 				handler := adapter(http.HandlerFunc(emptyhandler))
 
-				// Create a new request with the expected, but empty, request.Context
 				request := httptest.NewRequest("GET", "/clusters", nil)
+				// Create a new request with the expected, but empty, request.Context
 				requestContext := app.NewRequestContext(request.Context(), request)
 				ctx := context.WithValue(request.Context(), "request", requestContext)
 
@@ -263,10 +311,9 @@ func (cs *ValidClusterService) GetClusters(rc app.RequestContext) ([]models.Clus
 	return clusters, nil
 }
 
-func (cs *ValidClusterService) DeleteCluster(rc app.RequestContext, id string) (error) {
+func (cs *ValidClusterService) DeleteCluster(rc app.RequestContext, id string) error {
 	return nil
 }
-
 
 /*
  * Empty Cluster Service returns no Clusters
@@ -289,6 +336,6 @@ func (cs *EmptyClusterService) GetClusters(rc app.RequestContext) ([]models.Clus
 	return []models.Cluster{}, nil
 }
 
-func (cs *EmptyClusterService) DeleteCluster(rc app.RequestContext, id string) (error) {
+func (cs *EmptyClusterService) DeleteCluster(rc app.RequestContext, id string) error {
 	return errors.New(fmt.Sprintf("could not update cluster '%s' status to deleted", id))
 }
