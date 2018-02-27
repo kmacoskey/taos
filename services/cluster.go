@@ -14,6 +14,7 @@ type clusterDao interface {
 	GetClusters(db *sqlx.DB) ([]models.Cluster, error)
 	CreateCluster(db *sqlx.DB) (*models.Cluster, error)
 	UpdateCluster(db *sqlx.DB, cluster *models.Cluster) (*models.Cluster, error)
+	DeleteCluster(db *sqlx.DB, id string) (error)
 }
 
 type ClusterService struct {
@@ -33,6 +34,10 @@ func (s *ClusterService) GetCluster(rc app.RequestContext, id string) (*models.C
 func (s *ClusterService) GetClusters(rc app.RequestContext) ([]models.Cluster, error) {
 	clusters, err := s.dao.GetClusters(s.db)
 	return clusters, err
+}
+
+func (s *ClusterService) DeleteCluster(rc app.RequestContext, id string) (error) {
+	return s.dao.DeleteCluster(s.db, id)
 }
 
 func (s *ClusterService) ProvisionCluster(c *models.Cluster, config []byte) {

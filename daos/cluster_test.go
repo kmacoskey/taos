@@ -114,6 +114,61 @@ var _ = Describe("Cluster", func() {
 
 	})
 
+	Describe("Deleting clusters", func() {
+		Context("When deleting an existing cluster", func() {
+			BeforeEach(func() {
+				rows, err := db.NamedQuery(`INSERT INTO clusters (id,name,status) VALUES (:id,:name,:status) RETURNING id`, cluster1)
+				Expect(err).NotTo(HaveOccurred())
+				if rows.Next() {
+					rows.Scan(&clusterId)
+				}
+				err = dao.DeleteCluster(db, clusterId)
+			})
+			It("Should not error", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+			It("Should change status", func() {
+				updated_cluster := models.Cluster{}
+				err := db.Get(&updated_cluster, "SELECT * FROM clusters WHERE id=$1", clusterId)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(updated_cluster.Status).To(Equal("deleted"))
+			})
+		})
+
+		Context("When deleting a cluster that does not exist", func() {
+			BeforeEach(func() {
+				err = dao.DeleteCluster(db, cluster1.Id)
+			})
+			It("Should error", func() {
+				Expect(err).To(HaveOccurred())
+			})
+		})
+		
+		Context("When deleting a cluster that has already been deleted", func() {
+			BeforeEach(func() {
+				cluster1.Status = "deleted"
+				rows, err := db.NamedQuery(`INSERT INTO clusters (id,name,status) VALUES (:id,:name,:status) RETURNING id`, cluster1)
+				Expect(err).NotTo(HaveOccurred())
+				if rows.Next() {
+					rows.Scan(&clusterId)
+				}
+				err = dao.DeleteCluster(db, clusterId)
+			})
+			It("Should not error", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+
+		Context("When attempting to delete with an invalid ID", func() {
+			BeforeEach(func() {
+				err = dao.DeleteCluster(db, "invalid-uuid")
+			})
+			It("Should error", func() {
+				Expect(err).To(HaveOccurred())
+			})
+		})
+	})
+
 	Describe("Creating cluster", func() {
 		Context("When a cluster is successfully created", func() {
 			BeforeEach(func() {

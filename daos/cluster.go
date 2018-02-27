@@ -192,3 +192,46 @@ func (dao *ClusterDao) GetClusters(db *sqlx.DB) ([]models.Cluster, error) {
 	}
 
 }
+
+func (dao *ClusterDao) DeleteCluster(db *sqlx.DB, id string) (error) {
+	logger := log.WithFields(log.Fields{
+		"topic":   "taos",
+		"package": "daos",
+		"context": "query",
+		"event":   "delete_cluster",
+	})
+
+	tx, err := db.Beginx()
+	if err != nil {
+		logger.Panic("Could not create transaction")
+	}
+	logger.Debug("transaction created")
+
+	res, err := tx.Exec(`UPDATE clusters SET status = $2 WHERE id = $1`, id, "deleted")
+	if err != nil {
+		tx.Rollback()
+		logger.Debug("transaction rolledback")
+		logger.Debug(fmt.Sprintf("could not update cluster '%s' status to deleted", err.Error()))
+		return err
+	}
+
+	count, err := res.RowsAffected()
+	if err != nil {
+		tx.Rollback()
+		logger.Debug("transaction rolledback")
+		logger.Debug(fmt.Sprintf("could not update cluster '%s' status to deleted", err.Error()))
+		return err
+	}
+
+	if count != 1 {
+		tx.Rollback()
+		logger.Debug("transaction rolledback")
+		logger.Debug("no clusters updated")
+		return errors.New("no clusters updated")
+	}
+
+	tx.Commit()
+	logger.Debug("transaction commited")
+
+	return nil
+}

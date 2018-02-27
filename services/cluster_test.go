@@ -18,7 +18,9 @@ var _ = Describe("Cluster", func() {
 
 	var (
 		cluster                *models.Cluster
+		cluster1UUID	       string
 		cluster1               *models.Cluster
+		cluster2UUID	       string
 		cluster2               *models.Cluster
 		clusters               []models.Cluster
 		cs                     *ClusterService
@@ -35,8 +37,11 @@ var _ = Describe("Cluster", func() {
 		validTerraformConfig = []byte(`{"provider":{"google":{}}}`)
 		invalidTerraformConfig = []byte(`notjson`)
 
-		cluster1 = &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
-		cluster2 = &models.Cluster{Id: "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
+		cluster1UUID = "a19e2758-0ec5-11e8-ba89-0ed5f89f718b"
+		cluster1 = &models.Cluster{Id: cluster1UUID, Name: "cluster", Status: "status"}
+
+		cluster2UUID = "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b"
+		cluster2 = &models.Cluster{Id: cluster2UUID, Name: "cluster", Status: "status"}
 	})
 
 	// ======================================================================
@@ -187,6 +192,61 @@ var _ = Describe("Cluster", func() {
 		})
 	})
 
+	// ======================================================================
+	//      _      _      _       
+	//   __| | ___| | ___| |_ ___ 
+	//  / _` |/ _ \ |/ _ \ __/ _ \
+	// | (_| |  __/ |  __/ ||  __/
+	//  \__,_|\___|_|\___|\__\___|
+	//
+	// ======================================================================
+
+	Describe("Deleting a Cluster", func() {
+		Context("Deleting a cluster that exists", func() {
+			BeforeEach(func() {
+				clustersMap := make(map[string]*models.Cluster)
+				clustersMap[cluster1UUID] = cluster1
+				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
+				err = cs.DeleteCluster(rc, cluster1UUID)
+				cluster = clustersMap[cluster1UUID]
+			})
+			It("Should not error", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+			It("Should have a cluster returned with status deleted", func() {
+				Expect(cluster.Status).To(Equal("deleted"))
+			})
+		})
+
+		Context("Deleting a cluster that doesn't exist", func() {
+			BeforeEach(func() {
+				clustersMap := make(map[string]*models.Cluster)
+				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
+				err = cs.DeleteCluster(rc, cluster1UUID)
+			})
+			It("should error", func() {
+				Expect(err).Should(HaveOccurred())
+			})
+		})
+
+		Context("Deleting a cluster that has already been deleted", func() {
+			BeforeEach(func() {
+				clustersMap := make(map[string]*models.Cluster)
+				cluster1.Status = "deleted"
+				clustersMap[cluster1UUID] = cluster1
+				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
+				err = cs.DeleteCluster(rc, cluster1UUID)
+				cluster = clustersMap[cluster1UUID]
+			})
+			It("Should not error", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+			It("Should not change status", func() {
+				Expect(cluster.Status).To(Equal(cluster1.Status))
+			})
+		})
+	})
+
 })
 
 func NewMockDB() *MockDB {
@@ -230,6 +290,16 @@ func (dao *ValidClusterDao) GetClusters(db *sqlx.DB) ([]models.Cluster, error) {
 	return clusters, nil
 }
 
+func (dao *ValidClusterDao) DeleteCluster(db *sqlx.DB, id string) (error) {
+     	if _, ok := dao.clustersMap[id]; !ok {
+	   return errors.New("foo")
+	} else {
+           dao.clustersMap[id].Status = "deleted"
+	   return nil
+        }
+}
+
+
 type EmptyClusterDao struct {
 	clustersMap map[string]*models.Cluster
 }
@@ -253,4 +323,8 @@ func (dao *EmptyClusterDao) GetCluster(db *sqlx.DB, id string) (*models.Cluster,
 func (dao *EmptyClusterDao) GetClusters(db *sqlx.DB) ([]models.Cluster, error) {
 	clusters := []models.Cluster{}
 	return clusters, nil
+}
+
+func (dao *EmptyClusterDao) DeleteCluster(db *sqlx.DB, id string) (error) {
+     	return errors.New("foo")
 }

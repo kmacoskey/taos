@@ -6,6 +6,8 @@ import (
 
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -21,11 +23,14 @@ func emptyhandler(w http.ResponseWriter, r *http.Request) {}
 var _ = Describe("Cluster", func() {
 
 	var (
-		cluster1                *models.Cluster
-		cluster2                *models.Cluster
+		cluster1	                *models.Cluster
+		cluster2                	*models.Cluster
 		cluster1_json           []byte
 		cluster_list_json       []byte
 		empty_cluster_list_json []byte
+		empty_body_json		[]byte
+		cluster1_not_found_error	string
+		cluster1_could_not_delete_error	string
 		response                *httptest.ResponseRecorder
 		err                     error
 		resp                    *http.Response
@@ -35,6 +40,8 @@ var _ = Describe("Cluster", func() {
 		cluster1 = &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
 		cluster2 = &models.Cluster{Id: "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
 		cluster1_json, err = json.Marshal(cluster1)
+		cluster1_not_found_error = fmt.Sprintf("could not retrieve cluster '%v'\n", cluster1.Id)
+		cluster1_could_not_delete_error = fmt.Sprintf("could not update cluster '%v' status to deleted\n", cluster1.Id)
 		Expect(err).NotTo(HaveOccurred())
 
 		response = httptest.NewRecorder()
@@ -80,13 +87,13 @@ var _ = Describe("Cluster", func() {
 		Context("When that cluster does not exist", func() {
 			BeforeEach(func() {
 				// Unravel the middleware pattern to test only the Handler
-				ch := NewClusterHandler(NewValidClusterService())
+				ch := NewClusterHandler(NewEmptyClusterService())
 				adapter := ch.GetCluster()
 				handler := adapter(http.HandlerFunc(emptyhandler))
 
 				// Create a new request with the expected, but empty, request.Context
 				request := httptest.NewRequest("GET", "/cluster/id", nil)
-				request = mux.SetURLVars(request, map[string]string{"id": "66"})
+				request = mux.SetURLVars(request, map[string]string{"id": cluster1.Id})
 				requestContext := app.NewRequestContext(request.Context(), request)
 				ctx := context.WithValue(request.Context(), "request", requestContext)
 
@@ -95,11 +102,11 @@ var _ = Describe("Cluster", func() {
 				resp = response.Result()
 			})
 			It("Should return a 404 Not Found", func() {
-				Expect(resp.StatusCode).To(Equal(http.StatusOK))
+				Expect(resp.StatusCode).To(Equal(http.StatusNotFound))
 			})
 			It("Should return nothing in the response body", func() {
 				body, _ := ioutil.ReadAll(resp.Body)
-				Expect(body).To(Equal(cluster1_json))
+				Expect(string(body)).To(Equal(cluster1_not_found_error))
 			})
 		})
 	})
@@ -175,6 +182,59 @@ var _ = Describe("Cluster", func() {
 		})
 	})
 
+	Describe("Delete a Cluster for a specific id", func() {
+		Context("When that cluster exists", func() {
+			BeforeEach(func() {
+				// Unravel the middleware pattern to test only the Handler
+				ch := NewClusterHandler(NewValidClusterService())
+				adapter := ch.DeleteCluster()
+				handler := adapter(http.HandlerFunc(emptyhandler))
+
+				// Create a new request with the expected, but empty, request.Context
+				request := httptest.NewRequest("DELETE", "/cluster/id", nil)
+				request = mux.SetURLVars(request, map[string]string{"id": "1"})
+				requestContext := app.NewRequestContext(request.Context(), request)
+				ctx := context.WithValue(request.Context(), "request", requestContext)
+
+				// Create a server to get response for the given request
+				handler.ServeHTTP(response, request.WithContext(ctx))
+				resp = response.Result()
+			})
+			It("Should return a 200 OK", func() {
+				Expect(resp.StatusCode).To(Equal(http.StatusOK))
+			})
+			It("Should return nothing in the response body", func() {
+				body, _ := ioutil.ReadAll(resp.Body)
+				Expect(body).To(Equal(empty_body_json))
+			})
+		})
+		Context("When that cluster does not exist", func() {
+			BeforeEach(func() {
+				// Unravel the middleware pattern to test only the Handler
+				ch := NewClusterHandler(NewEmptyClusterService())
+				adapter := ch.DeleteCluster()
+				handler := adapter(http.HandlerFunc(emptyhandler))
+
+				// Create a new request with the expected, but empty, request.Context
+				request := httptest.NewRequest("DELETE", "/cluster/id", nil)
+				request = mux.SetURLVars(request, map[string]string{"id": cluster1.Id})
+				requestContext := app.NewRequestContext(request.Context(), request)
+				ctx := context.WithValue(request.Context(), "request", requestContext)
+
+				// Create a server to get response for the given request
+				handler.ServeHTTP(response, request.WithContext(ctx))
+				resp = response.Result()
+			})
+			It("Should return a 404 Not Found", func() {
+				Expect(resp.StatusCode).To(Equal(http.StatusNotFound))
+			})
+			It("Should return nothing in the response body", func() {
+				body, _ := ioutil.ReadAll(resp.Body)
+				Expect(string(body)).To(Equal(cluster1_could_not_delete_error))
+			})
+		})
+	})
+
 })
 
 /*
@@ -203,6 +263,11 @@ func (cs *ValidClusterService) GetClusters(rc app.RequestContext) ([]models.Clus
 	return clusters, nil
 }
 
+func (cs *ValidClusterService) DeleteCluster(rc app.RequestContext, id string) (error) {
+	return nil
+}
+
+
 /*
  * Empty Cluster Service returns no Clusters
  */
@@ -217,9 +282,13 @@ func (cs *EmptyClusterService) CreateCluster(rc app.RequestContext) (*models.Clu
 }
 
 func (cs *EmptyClusterService) GetCluster(rc app.RequestContext, id string) (*models.Cluster, error) {
-	return nil, nil
+	return nil, errors.New(fmt.Sprintf("could not retrieve cluster '%v'", id))
 }
 
 func (cs *EmptyClusterService) GetClusters(rc app.RequestContext) ([]models.Cluster, error) {
 	return []models.Cluster{}, nil
+}
+
+func (cs *EmptyClusterService) DeleteCluster(rc app.RequestContext, id string) (error) {
+	return errors.New(fmt.Sprintf("could not update cluster '%s' status to deleted", id))
 }

@@ -17,6 +17,7 @@ type clusterService interface {
 	GetCluster(rc app.RequestContext, id string) (*models.Cluster, error)
 	GetClusters(rc app.RequestContext) ([]models.Cluster, error)
 	CreateCluster(rc app.RequestContext) (*models.Cluster, error)
+	DeleteCluster(rc app.RequestContext, id string) (error)
 }
 
 type ClusterHandler struct {
@@ -54,6 +55,11 @@ func ServeClusterResources(router *mux.Router, db *sqlx.DB) {
 		app.WithRequestContext(),
 	)).Methods("PUT")
 
+	router.Handle("/cluster/{id}", app.Adapt(
+		router,
+		h.DeleteCluster(),
+		app.WithRequestContext(),
+	)).Methods("DELETE")
 }
 
 // Request provisioning of a new Cluster
@@ -105,8 +111,9 @@ func (ch *ClusterHandler) GetCluster() app.Adapter {
 
 			cluster, err := ch.cs.GetCluster(rc, id)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				http.Error(w, err.Error(), http.StatusNotFound)
 				logger.Error("could not retrieve cluster for given id in request")
+				return
 			}
 
 			js, err := json.Marshal(cluster)
@@ -151,6 +158,31 @@ func (ch *ClusterHandler) GetClusters() app.Adapter {
 
 			w.Header().Set("Content-Type", "application/json")
 			w.Write(js)
+		})
+	}
+}
+
+// Delete a Cluster for a given id
+func (ch *ClusterHandler) DeleteCluster() app.Adapter {
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			logger := log.WithFields(log.Fields{
+				"topic":   "taos",
+				"package": "handlers",
+				"context": "cluster_handler",
+				"event":   "deletecluster",
+			})
+
+			vars := mux.Vars(r)
+			rc := app.GetRequestContext(r)
+
+			id := vars["id"]
+
+			err := ch.cs.DeleteCluster(rc, id)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusNotFound)
+				logger.Error("could not retrieve cluster for given id in request")
+			}
 		})
 	}
 }
