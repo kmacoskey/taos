@@ -18,9 +18,9 @@ var _ = Describe("Cluster", func() {
 
 	var (
 		cluster                *models.Cluster
-		cluster1UUID	       string
+		cluster1UUID           string
 		cluster1               *models.Cluster
-		cluster2UUID	       string
+		cluster2UUID           string
 		cluster2               *models.Cluster
 		clusters               []models.Cluster
 		cs                     *ClusterService
@@ -94,15 +94,13 @@ var _ = Describe("Cluster", func() {
 			It("Should set the cluster status in the daos", func() {
 				Expect(cluster.Status).To(Equal("provisioning"))
 			})
-			/*
-			 * It("Should eventually be provisioned", func() {
-			 *   Eventually(func() string {
-			 *     c, err := cs.GetCluster(rc, cluster.Id)
-			 *     Expect(err).NotTo(HaveOccurred())
-			 *     return c.Status
-			 *   }, 2, 0.5).Should(Equal("provision_success"))
-			 * })
-			 */
+			It("Should eventually be provisioned", func() {
+				Eventually(func() string {
+					c, err := cs.GetCluster(rc, cluster.Id)
+					Expect(err).NotTo(HaveOccurred())
+					return c.Status
+				}, 2, 0.5).Should(Equal("provision_success"))
+			})
 		})
 
 		Context("A cluster is not returned from the dao", func() {
@@ -193,8 +191,8 @@ var _ = Describe("Cluster", func() {
 	})
 
 	// ======================================================================
-	//      _      _      _       
-	//   __| | ___| | ___| |_ ___ 
+	//      _      _      _
+	//   __| | ___| | ___| |_ ___
 	//  / _` |/ _ \ |/ _ \ __/ _ \
 	// | (_| |  __/ |  __/ ||  __/
 	//  \__,_|\___|_|\___|\__\___|
@@ -207,14 +205,16 @@ var _ = Describe("Cluster", func() {
 				clustersMap := make(map[string]*models.Cluster)
 				clustersMap[cluster1UUID] = cluster1
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
-				err = cs.DeleteCluster(rc, cluster1UUID)
-				cluster = clustersMap[cluster1UUID]
+				cluster, err = cs.DeleteCluster(rc, cluster1UUID)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
-			It("Should have a cluster returned with status deleted", func() {
-				Expect(cluster.Status).To(Equal("deleted"))
+			It("Should return the same cluster", func() {
+				Expect(cluster.Id).To(Equal(cluster1.Id))
+			})
+			It("The returned cluster should have a deleting status", func() {
+				Expect(cluster.Status).To(Equal("deleting"))
 			})
 		})
 
@@ -222,10 +222,13 @@ var _ = Describe("Cluster", func() {
 			BeforeEach(func() {
 				clustersMap := make(map[string]*models.Cluster)
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
-				err = cs.DeleteCluster(rc, cluster1UUID)
+				cluster, err = cs.DeleteCluster(rc, cluster1UUID)
 			})
 			It("should error", func() {
 				Expect(err).Should(HaveOccurred())
+			})
+			It("Should return a nil cluster", func() {
+				Expect(cluster).To(BeNil())
 			})
 		})
 
@@ -235,14 +238,16 @@ var _ = Describe("Cluster", func() {
 				cluster1.Status = "deleted"
 				clustersMap[cluster1UUID] = cluster1
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
-				err = cs.DeleteCluster(rc, cluster1UUID)
-				cluster = clustersMap[cluster1UUID]
+				cluster, err = cs.DeleteCluster(rc, cluster1UUID)
 			})
-			It("Should not error", func() {
+			It("Should error", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
-			It("Should not change status", func() {
+			It("Should not change status of the original cluster", func() {
 				Expect(cluster.Status).To(Equal(cluster1.Status))
+			})
+			It("Should return the original cluster", func() {
+				Expect(cluster.Id).To(Equal(cluster1.Id))
 			})
 		})
 	})
@@ -290,15 +295,14 @@ func (dao *ValidClusterDao) GetClusters(db *sqlx.DB) ([]models.Cluster, error) {
 	return clusters, nil
 }
 
-func (dao *ValidClusterDao) DeleteCluster(db *sqlx.DB, id string) (error) {
-     	if _, ok := dao.clustersMap[id]; !ok {
-	   return errors.New("foo")
+func (dao *ValidClusterDao) DeleteCluster(db *sqlx.DB, id string) (*models.Cluster, error) {
+	if _, ok := dao.clustersMap[id]; !ok {
+		return nil, errors.New("foo")
 	} else {
-           dao.clustersMap[id].Status = "deleted"
-	   return nil
-        }
+		dao.clustersMap[id].Status = "deleting"
+		return dao.clustersMap[id], nil
+	}
 }
-
 
 type EmptyClusterDao struct {
 	clustersMap map[string]*models.Cluster
@@ -325,6 +329,6 @@ func (dao *EmptyClusterDao) GetClusters(db *sqlx.DB) ([]models.Cluster, error) {
 	return clusters, nil
 }
 
-func (dao *EmptyClusterDao) DeleteCluster(db *sqlx.DB, id string) (error) {
-     	return errors.New("foo")
+func (dao *EmptyClusterDao) DeleteCluster(db *sqlx.DB, id string) (*models.Cluster, error) {
+	return nil, errors.New("foo")
 }

@@ -18,7 +18,7 @@ type clusterService interface {
 	GetCluster(rc app.RequestContext, id string) (*models.Cluster, error)
 	GetClusters(rc app.RequestContext) ([]models.Cluster, error)
 	CreateCluster(rc app.RequestContext) (*models.Cluster, error)
-	DeleteCluster(rc app.RequestContext, id string) (error)
+	DeleteCluster(rc app.RequestContext, id string) (*models.Cluster, error)
 }
 
 type ClusterHandler struct {
@@ -116,7 +116,7 @@ func (ch *ClusterHandler) GetCluster() app.Adapter {
 			cluster, err := ch.cs.GetCluster(rc, id)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusNotFound)
-				logger.Error("could not retrieve cluster for given id in request")
+				logger.Debug("could not retrieve cluster for given id in request")
 				return
 			}
 
@@ -182,10 +182,21 @@ func (ch *ClusterHandler) DeleteCluster() app.Adapter {
 
 			id := vars["id"]
 
-			err := ch.cs.DeleteCluster(rc, id)
+			cluster, err := ch.cs.DeleteCluster(rc, id)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusNotFound)
-				logger.Error("could not retrieve cluster for given id in request")
+				logger.Debug("could not retrieve cluster for given id in request")
+			}
+
+			if cluster != nil {
+				js, err := json.Marshal(cluster)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					logger.Panic("failed to marshal cluster data for response")
+				}
+
+				w.Header().Set("Content-Type", "application/json")
+				w.Write(js)
 			}
 		})
 	}

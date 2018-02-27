@@ -75,7 +75,18 @@ var _ = Describe("Cluster", func() {
 	AfterEach(func() {
 		// Ensure the test data is removed
 		db.MustExec(truncate_clusters)
+
 	})
+
+	// ======================================================================
+	//                  _       _
+	//  _   _ _ __   __| | __ _| |_ ___
+	// | | | | '_ \ / _` |/ _` | __/ _ \
+	// | |_| | |_) | (_| | (_| | ||  __/
+	//  \__,_| .__/ \__,_|\__,_|\__\___|
+	//       |_|
+	//
+	// ======================================================================
 
 	Describe("Setting Cluster fields", func() {
 		Context("When changing the cluster status for an existing cluster", func() {
@@ -114,6 +125,15 @@ var _ = Describe("Cluster", func() {
 
 	})
 
+	// ======================================================================
+	//      _      _      _
+	//   __| | ___| | ___| |_ ___
+	//  / _` |/ _ \ |/ _ \ __/ _ \
+	// | (_| |  __/ |  __/ ||  __/
+	//  \__,_|\___|_|\___|\__\___|
+	//
+	// ======================================================================
+
 	Describe("Deleting clusters", func() {
 		Context("When deleting an existing cluster", func() {
 			BeforeEach(func() {
@@ -122,52 +142,88 @@ var _ = Describe("Cluster", func() {
 				if rows.Next() {
 					rows.Scan(&clusterId)
 				}
-				err = dao.DeleteCluster(db, clusterId)
+				cluster, err = dao.DeleteCluster(db, clusterId)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
-			It("Should change status", func() {
-				updated_cluster := models.Cluster{}
-				err := db.Get(&updated_cluster, "SELECT * FROM clusters WHERE id=$1", clusterId)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(updated_cluster.Status).To(Equal("deleted"))
+			It("Should return the same cluster", func() {
+				Expect(cluster.Id).To(Equal(cluster1.Id))
+			})
+			It("The returned cluster should have a deleting status", func() {
+				Expect(cluster.Status).To(Equal("deleting"))
 			})
 		})
 
 		Context("When deleting a cluster that does not exist", func() {
 			BeforeEach(func() {
-				err = dao.DeleteCluster(db, cluster1.Id)
+				cluster, err = dao.DeleteCluster(db, cluster1.Id)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
 			})
+			It("Should return a nil cluster", func() {
+				Expect(cluster).To(BeNil())
+			})
 		})
-		
+
 		Context("When deleting a cluster that has already been deleted", func() {
 			BeforeEach(func() {
 				cluster1.Status = "deleted"
-				rows, err := db.NamedQuery(`INSERT INTO clusters (id,name,status) VALUES (:id,:name,:status) RETURNING id`, cluster1)
-				Expect(err).NotTo(HaveOccurred())
+				rows, insert_err := db.NamedQuery(`INSERT INTO clusters (id,name,status) VALUES (:id,:name,:status) RETURNING id`, cluster1)
+				Expect(insert_err).NotTo(HaveOccurred())
 				if rows.Next() {
 					rows.Scan(&clusterId)
 				}
-				err = dao.DeleteCluster(db, clusterId)
+				cluster, err = dao.DeleteCluster(db, clusterId)
 			})
-			It("Should not error", func() {
-				Expect(err).NotTo(HaveOccurred())
+			It("Should error", func() {
+				Expect(err).To(HaveOccurred())
+			})
+			It("Should return a nil cluster", func() {
+				Expect(cluster).To(BeNil())
+			})
+		})
+
+		Context("When deleting a cluster that is already deleting", func() {
+			BeforeEach(func() {
+				cluster1.Status = "deleting"
+				rows, insert_err := db.NamedQuery(`INSERT INTO clusters (id,name,status) VALUES (:id,:name,:status) RETURNING id`, cluster1)
+				Expect(insert_err).NotTo(HaveOccurred())
+				if rows.Next() {
+					rows.Scan(&clusterId)
+				}
+				cluster, err = dao.DeleteCluster(db, clusterId)
+			})
+			It("Should error", func() {
+				Expect(err).To(HaveOccurred())
+			})
+			It("Should return a nil cluster", func() {
+				Expect(cluster).To(BeNil())
 			})
 		})
 
 		Context("When attempting to delete with an invalid ID", func() {
 			BeforeEach(func() {
-				err = dao.DeleteCluster(db, "invalid-uuid")
+				cluster, err = dao.DeleteCluster(db, "invalid-uuid")
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
 			})
+			It("Should return a nil cluster", func() {
+				Expect(cluster).To(BeNil())
+			})
 		})
 	})
+
+	// ======================================================================
+	//                      _
+	//   ___ _ __ ___  __ _| |_ ___
+	//  / __| '__/ _ \/ _` | __/ _ \
+	// | (__| | |  __/ (_| | ||  __/
+	//  \___|_|  \___|\__,_|\__\___|
+	//
+	// ======================================================================
 
 	Describe("Creating cluster", func() {
 		Context("When a cluster is successfully created", func() {
@@ -186,6 +242,16 @@ var _ = Describe("Cluster", func() {
 		})
 
 	})
+
+	// ======================================================================
+	//             _
+	//   __ _  ___| |_
+	//  / _` |/ _ \ __|
+	// | (_| |  __/ |_
+	//  \__, |\___|\__|
+	//  |___/
+	//
+	// ======================================================================
 
 	Describe("Retrieving a Cluster", func() {
 		Context("With an id that exists", func() {
@@ -218,6 +284,16 @@ var _ = Describe("Cluster", func() {
 		})
 
 	})
+
+	// ======================================================================
+	//             _
+	//   __ _  ___| |_ ___
+	//  / _` |/ _ \ __/ __|
+	// | (_| |  __/ |_\__ \
+	//  \__, |\___|\__|___/
+	//  |___/
+	//
+	// ======================================================================
 
 	Describe("Retrieving clusters", func() {
 		Context("When clusters exist", func() {

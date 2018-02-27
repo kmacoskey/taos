@@ -193,7 +193,7 @@ func (dao *ClusterDao) GetClusters(db *sqlx.DB) ([]models.Cluster, error) {
 
 }
 
-func (dao *ClusterDao) DeleteCluster(db *sqlx.DB, id string) (error) {
+func (dao *ClusterDao) DeleteCluster(db *sqlx.DB, id string) (*models.Cluster, error) {
 	logger := log.WithFields(log.Fields{
 		"topic":   "taos",
 		"package": "daos",
@@ -207,12 +207,13 @@ func (dao *ClusterDao) DeleteCluster(db *sqlx.DB, id string) (error) {
 	}
 	logger.Debug("transaction created")
 
-	res, err := tx.Exec(`UPDATE clusters SET status = $2 WHERE id = $1`, id, "deleted")
+	// Update cluster status to 'deleting' unless it is already 'deleted' or 'deleting'
+	res, err := tx.Exec(`UPDATE clusters SET status = $2 WHERE id = $1 AND status NOT IN ('deleted', 'deleting')`, id, "deleting")
 	if err != nil {
 		tx.Rollback()
 		logger.Debug("transaction rolledback")
 		logger.Debug(fmt.Sprintf("could not update cluster '%s' status to deleted", err.Error()))
-		return err
+		return nil, err
 	}
 
 	count, err := res.RowsAffected()
@@ -220,18 +221,36 @@ func (dao *ClusterDao) DeleteCluster(db *sqlx.DB, id string) (error) {
 		tx.Rollback()
 		logger.Debug("transaction rolledback")
 		logger.Debug(fmt.Sprintf("could not update cluster '%s' status to deleted", err.Error()))
-		return err
+		return nil, err
 	}
 
 	if count != 1 {
 		tx.Rollback()
 		logger.Debug("transaction rolledback")
 		logger.Debug("no clusters updated")
-		return errors.New("no clusters updated")
+		return nil, errors.New("no clusters updated")
 	}
 
-	tx.Commit()
-	logger.Debug("transaction commited")
+	cluster := models.Cluster{}
 
-	return nil
+	err = tx.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", id)
+	if err == nil {
+		tx.Commit()
+		logger.Debug("transaction commited")
+		return &cluster, nil
+	}
+
+	tx.Rollback()
+	logger.Debug("transaction rolledback")
+
+	switch {
+	case noRelation.MatchString(err.Error()):
+		logger.Error(err)
+		return nil, err
+	default:
+		logger.Debug(fmt.Sprintf("could not retrieve cluster '%v'", id))
+		logger.Debug(err)
+		return nil, err
+	}
+
 }

@@ -30,7 +30,6 @@ var _ = Describe("Cluster", func() {
 		cluster1_json                   []byte
 		cluster_list_json               []byte
 		empty_cluster_list_json         []byte
-		empty_body_json                 []byte
 		cluster1_not_found_error        string
 		cluster1_could_not_delete_error string
 		response                        *httptest.ResponseRecorder
@@ -230,6 +229,15 @@ var _ = Describe("Cluster", func() {
 		})
 	})
 
+	// ======================================================================
+	//      _      _      _
+	//   __| | ___| | ___| |_ ___
+	//  / _` |/ _ \ |/ _ \ __/ _ \
+	// | (_| |  __/ |  __/ ||  __/
+	//  \__,_|\___|_|\___|\__\___|
+	//
+	// ======================================================================
+
 	Describe("Delete a Cluster for a specific id", func() {
 		Context("When that cluster exists", func() {
 			BeforeEach(func() {
@@ -251,9 +259,12 @@ var _ = Describe("Cluster", func() {
 			It("Should return a 200 OK", func() {
 				Expect(resp.StatusCode).To(Equal(http.StatusOK))
 			})
-			It("Should return nothing in the response body", func() {
-				body, _ := ioutil.ReadAll(resp.Body)
-				Expect(body).To(Equal(empty_body_json))
+			It("Should return the expected cluster as json in the response body", func() {
+				body, err := ioutil.ReadAll(resp.Body)
+				cluster := &models.Cluster{}
+				err = json.Unmarshal(body, &cluster)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(body).To(Equal(cluster1_json))
 			})
 		})
 		Context("When that cluster does not exist", func() {
@@ -311,8 +322,9 @@ func (cs *ValidClusterService) GetClusters(rc app.RequestContext) ([]models.Clus
 	return clusters, nil
 }
 
-func (cs *ValidClusterService) DeleteCluster(rc app.RequestContext, id string) error {
-	return nil
+func (cs *ValidClusterService) DeleteCluster(rc app.RequestContext, id string) (*models.Cluster, error) {
+	cluster1 := models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
+	return &cluster1, nil
 }
 
 /*
@@ -336,6 +348,6 @@ func (cs *EmptyClusterService) GetClusters(rc app.RequestContext) ([]models.Clus
 	return []models.Cluster{}, nil
 }
 
-func (cs *EmptyClusterService) DeleteCluster(rc app.RequestContext, id string) error {
-	return errors.New(fmt.Sprintf("could not update cluster '%s' status to deleted", id))
+func (cs *EmptyClusterService) DeleteCluster(rc app.RequestContext, id string) (*models.Cluster, error) {
+	return nil, errors.New(fmt.Sprintf("could not update cluster '%s' status to deleted", id))
 }
