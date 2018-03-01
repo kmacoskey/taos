@@ -25,7 +25,7 @@ func NewClusterDao() *ClusterDao {
 	return &ClusterDao{}
 }
 
-func (dao *ClusterDao) CreateCluster(db *sqlx.DB) (*models.Cluster, error) {
+func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte) (*models.Cluster, error) {
 	logger := log.WithFields(log.Fields{
 		"topic":   "taos",
 		"package": "daos",
@@ -33,9 +33,14 @@ func (dao *ClusterDao) CreateCluster(db *sqlx.DB) (*models.Cluster, error) {
 		"event":   "create_cluster",
 	})
 
+	if len(config) == 0 {
+		return nil, errors.New("Refusing to create cluster without config")
+	}
+
 	cluster := models.Cluster{
-		Name:   sillyname.GenerateStupidName(),
-		Status: "provisioning",
+		Name:            sillyname.GenerateStupidName(),
+		Status:          "provisioning",
+		TerraformConfig: config,
 	}
 
 	var id string
@@ -46,7 +51,7 @@ func (dao *ClusterDao) CreateCluster(db *sqlx.DB) (*models.Cluster, error) {
 	}
 	logger.Debug("transaction created")
 
-	rows, err := tx.NamedQuery(`INSERT INTO clusters (name,status) VALUES (:name,:status) RETURNING id`, cluster)
+	rows, err := tx.NamedQuery(`INSERT INTO clusters (name,status,terraform_config) VALUES (:name,:status,:terraform_config) RETURNING id`, cluster)
 	if err == nil {
 		if rows.Next() {
 			rows.Scan(&id)

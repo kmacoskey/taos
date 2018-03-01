@@ -18,9 +18,10 @@ var (
 	cluster_test_searchpath  = `ALTER ROLE taos SET search_path TO cluster_test, public`
 	clusters_ddl             = `
 		CREATE TABLE IF NOT EXISTS cluster_test.clusters (
-				id 			UUID PRIMARY KEY DEFAULT public.gen_random_uuid(),
-				name 		text,
-				status 	text
+				id 								UUID PRIMARY KEY DEFAULT public.gen_random_uuid(),
+				name 							text,
+				status 						text,
+				terraform_config 	json
 		)`
 	truncate_clusters = `TRUNCATE TABLE clusters`
 	drop_clusters_ddl = `DROP TABLE IF EXISTS cluster_test.clusters CASCADE`
@@ -49,15 +50,16 @@ var _ = AfterSuite(func() {
 var _ = Describe("Cluster", func() {
 
 	var (
-		cluster     *models.Cluster
-		cluster1    *models.Cluster
-		cluster2    *models.Cluster
-		notacluster *models.Cluster
-		clusters    []models.Cluster
-		clusterId   string
-		err         error
-		dao         ClusterDao
-		tx          *sqlx.Tx
+		cluster         *models.Cluster
+		cluster1        *models.Cluster
+		cluster2        *models.Cluster
+		notacluster     *models.Cluster
+		clusters        []models.Cluster
+		clusterId       string
+		err             error
+		dao             ClusterDao
+		tx              *sqlx.Tx
+		terraformConfig []byte
 	)
 
 	BeforeEach(func() {
@@ -70,6 +72,7 @@ var _ = Describe("Cluster", func() {
 		cluster1 = &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster_1", Status: "provisioned"}
 		cluster2 = &models.Cluster{Id: "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster_2", Status: "provisioned"}
 		notacluster = &models.Cluster{Id: "a19e1bfe-0ec5-11ea-ba89-0ed0f89f718b", Name: "notacluster", Status: "nothere"}
+		terraformConfig = []byte(`{"provider":{"google":{}}}`)
 	})
 
 	AfterEach(func() {
@@ -228,7 +231,7 @@ var _ = Describe("Cluster", func() {
 	Describe("Creating cluster", func() {
 		Context("When a cluster is successfully created", func() {
 			BeforeEach(func() {
-				cluster, err = dao.CreateCluster(db)
+				cluster, err = dao.CreateCluster(db, terraformConfig)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -238,6 +241,21 @@ var _ = Describe("Cluster", func() {
 			})
 			It("Should be in the provisioning status", func() {
 				Expect(cluster.Status).To(Equal("provisioning"))
+			})
+			It("Should have the written config in the config field", func() {
+				Expect(cluster.TerraformConfig).To(Equal(terraformConfig))
+			})
+		})
+
+		Context("When a cluster is created without config", func() {
+			BeforeEach(func() {
+				cluster, err = dao.CreateCluster(db, nil)
+			})
+			It("Should error", func() {
+				Expect(err).To(HaveOccurred())
+			})
+			It("Should not return a cluster", func() {
+				Expect(cluster).To(BeNil())
 			})
 		})
 
@@ -282,7 +300,6 @@ var _ = Describe("Cluster", func() {
 				Expect(err).Should(HaveOccurred())
 			})
 		})
-
 	})
 
 	// ======================================================================

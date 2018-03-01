@@ -38,10 +38,20 @@ var _ = Describe("Cluster", func() {
 		invalidTerraformConfig = []byte(`notjson`)
 
 		cluster1UUID = "a19e2758-0ec5-11e8-ba89-0ed5f89f718b"
-		cluster1 = &models.Cluster{Id: cluster1UUID, Name: "cluster", Status: "status"}
+		cluster1 = &models.Cluster{
+			Id:              cluster1UUID,
+			Name:            "cluster",
+			Status:          "status",
+			TerraformConfig: []byte(`{"provider":{"google":{}}}`),
+		}
 
 		cluster2UUID = "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b"
-		cluster2 = &models.Cluster{Id: cluster2UUID, Name: "cluster", Status: "status"}
+		cluster2 = &models.Cluster{
+			Id:              cluster2UUID,
+			Name:            "cluster",
+			Status:          "status",
+			TerraformConfig: []byte(`{"provider":{"google":{}}}`),
+		}
 	})
 
 	// ======================================================================
@@ -52,27 +62,6 @@ var _ = Describe("Cluster", func() {
 	//  \___|_|  \___|\__,_|\__\___|
 	//
 	// ======================================================================
-
-	Describe("Creating an Invalid Cluster", func() {
-		Context("Invalid terraform config is used", func() {
-			BeforeEach(func() {
-				clustersMap := make(map[string]*models.Cluster)
-				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
-				rc.SetTerraformConfig(invalidTerraformConfig)
-				cluster, err = cs.CreateCluster(rc)
-			})
-			It("Should not return an error when requested", func() {
-				Expect(err).NotTo(HaveOccurred())
-			})
-			It("Should eventually change status", func() {
-				Eventually(func() string {
-					c, err := cs.GetCluster(rc, cluster.Id)
-					Expect(err).NotTo(HaveOccurred())
-					return c.Status
-				}, 2, 0.5).Should(Equal("provision_failed"))
-			})
-		})
-	})
 
 	Describe("Creating a Valid Cluster", func() {
 		Context("A cluster is returned from the dao", func() {
@@ -115,7 +104,27 @@ var _ = Describe("Cluster", func() {
 				Expect(err).Should(HaveOccurred())
 			})
 		})
+	})
 
+	Describe("Creating an Invalid Cluster", func() {
+		Context("Invalid terraform config is used", func() {
+			BeforeEach(func() {
+				clustersMap := make(map[string]*models.Cluster)
+				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
+				rc.SetTerraformConfig(invalidTerraformConfig)
+				cluster, err = cs.CreateCluster(rc)
+			})
+			It("Should not return an error when requested", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+			It("Should eventually change status", func() {
+				Eventually(func() string {
+					c, err := cs.GetCluster(rc, cluster.Id)
+					Expect(err).NotTo(HaveOccurred())
+					return c.Status
+				}, 2, 0.5).Should(Equal("provision_failed"))
+			})
+		})
 	})
 
 	// ======================================================================
@@ -200,7 +209,7 @@ var _ = Describe("Cluster", func() {
 	// ======================================================================
 
 	Describe("Deleting a Cluster", func() {
-		Context("Deleting a cluster that exists", func() {
+		Context("That exists", func() {
 			BeforeEach(func() {
 				clustersMap := make(map[string]*models.Cluster)
 				clustersMap[cluster1UUID] = cluster1
@@ -214,11 +223,18 @@ var _ = Describe("Cluster", func() {
 				Expect(cluster.Id).To(Equal(cluster1.Id))
 			})
 			It("The returned cluster should have a deleting status", func() {
-				Expect(cluster.Status).To(Equal("deleting"))
+				Expect(cluster.Status).To(Equal("destroying"))
+			})
+			It("Should eventually be deleted", func() {
+				Eventually(func() string {
+					c, err := cs.GetCluster(rc, cluster.Id)
+					Expect(err).NotTo(HaveOccurred())
+					return c.Status
+				}, 2, 0.5).Should(Equal("destroyed"))
 			})
 		})
 
-		Context("Deleting a cluster that doesn't exist", func() {
+		Context("That doesn't exist", func() {
 			BeforeEach(func() {
 				clustersMap := make(map[string]*models.Cluster)
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
@@ -232,10 +248,10 @@ var _ = Describe("Cluster", func() {
 			})
 		})
 
-		Context("Deleting a cluster that has already been deleted", func() {
+		Context("That has already been deleted", func() {
 			BeforeEach(func() {
 				clustersMap := make(map[string]*models.Cluster)
-				cluster1.Status = "deleted"
+				cluster1.Status = "destroyed"
 				clustersMap[cluster1UUID] = cluster1
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
 				cluster, err = cs.DeleteCluster(rc, cluster1UUID)
@@ -272,9 +288,14 @@ func NewValidClusterDao(cm map[string]*models.Cluster) *ValidClusterDao {
 	}
 }
 
-func (dao *ValidClusterDao) CreateCluster(db *sqlx.DB) (*models.Cluster, error) {
+func (dao *ValidClusterDao) CreateCluster(db *sqlx.DB, config []byte) (*models.Cluster, error) {
 	uuid := uuid.Must(uuid.NewV4()).String()
-	dao.clustersMap[uuid] = &models.Cluster{Id: uuid, Name: "cluster", Status: "status"}
+	dao.clustersMap[uuid] = &models.Cluster{
+		Id:              uuid,
+		Name:            "cluster",
+		Status:          "status",
+		TerraformConfig: config,
+	}
 	return dao.clustersMap[uuid], nil
 }
 
@@ -299,7 +320,7 @@ func (dao *ValidClusterDao) DeleteCluster(db *sqlx.DB, id string) (*models.Clust
 	if _, ok := dao.clustersMap[id]; !ok {
 		return nil, errors.New("foo")
 	} else {
-		dao.clustersMap[id].Status = "deleting"
+		dao.clustersMap[id].Status = "destroying"
 		return dao.clustersMap[id], nil
 	}
 }
@@ -312,7 +333,7 @@ func NewEmptyClusterDao() *EmptyClusterDao {
 	return &EmptyClusterDao{}
 }
 
-func (dao *EmptyClusterDao) CreateCluster(db *sqlx.DB) (*models.Cluster, error) {
+func (dao *EmptyClusterDao) CreateCluster(db *sqlx.DB, config []byte) (*models.Cluster, error) {
 	return &models.Cluster{}, errors.New("foo")
 }
 

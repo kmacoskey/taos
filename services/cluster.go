@@ -12,7 +12,7 @@ import (
 type clusterDao interface {
 	GetCluster(db *sqlx.DB, id string) (*models.Cluster, error)
 	GetClusters(db *sqlx.DB) ([]models.Cluster, error)
-	CreateCluster(db *sqlx.DB) (*models.Cluster, error)
+	CreateCluster(db *sqlx.DB, config []byte) (*models.Cluster, error)
 	UpdateCluster(db *sqlx.DB, cluster *models.Cluster) (*models.Cluster, error)
 	DeleteCluster(db *sqlx.DB, id string) (*models.Cluster, error)
 }
@@ -37,10 +37,83 @@ func (s *ClusterService) GetClusters(rc app.RequestContext) ([]models.Cluster, e
 }
 
 func (s *ClusterService) DeleteCluster(rc app.RequestContext, id string) (*models.Cluster, error) {
+	cluster, err := s.dao.DeleteCluster(s.db, id)
+	if err != nil {
+		return cluster, err
+	}
+
+	go s.TerraformDestroyCluster(cluster)
+
 	return s.dao.DeleteCluster(s.db, id)
 }
 
-func (s *ClusterService) ProvisionCluster(c *models.Cluster, config []byte) {
+func (s *ClusterService) CreateCluster(rc app.RequestContext) (*models.Cluster, error) {
+	cluster, err := s.dao.CreateCluster(s.db, rc.TerraformConfig())
+	if err != nil {
+		return cluster, err
+	}
+
+	// TODO: The returned cluster from create should have the terraform config in the model?
+	go s.TerraformProvisionCluster(cluster, rc.TerraformConfig())
+
+	cluster.Status = "provisioning"
+
+	return cluster, err
+}
+
+func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster) {
+
+	t := &terraform.Terraform{
+		Config: c.TerraformConfig,
+	}
+
+	tc := terraform.Client{
+		Terraform: t,
+	}
+
+	err := tc.ClientInit()
+	if err != nil {
+		c.Status = "destruction_failed at init"
+		fmt.Println(err)
+		_, err := s.dao.UpdateCluster(s.db, c)
+		if err != nil {
+			fmt.Println(err)
+		}
+		return
+	}
+
+	err = tc.Destroy()
+	if err != nil {
+		c.Status = "destruction_failed at destroy"
+		_, err := s.dao.UpdateCluster(s.db, c)
+		if err != nil {
+			fmt.Println(err)
+		}
+		return
+	}
+
+	err = tc.ClientDestroy()
+	if err != nil {
+		c.Status = "destruction_failed at client destroy"
+		_, err := s.dao.UpdateCluster(s.db, c)
+		if err != nil {
+			fmt.Println(err)
+		}
+		return
+	}
+
+	if err == nil {
+		c.Status = "destroyed"
+		_, err := s.dao.UpdateCluster(s.db, c)
+		if err != nil {
+			fmt.Println(err)
+		}
+		return
+	}
+
+}
+
+func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []byte) {
 
 	t := &terraform.Terraform{
 		Config: config,
@@ -89,17 +162,4 @@ func (s *ClusterService) ProvisionCluster(c *models.Cluster, config []byte) {
 		return
 	}
 
-}
-
-func (s *ClusterService) CreateCluster(rc app.RequestContext) (*models.Cluster, error) {
-	cluster, err := s.dao.CreateCluster(s.db)
-	if err != nil {
-		return cluster, err
-	}
-
-	go s.ProvisionCluster(cluster, rc.TerraformConfig())
-
-	cluster.Status = "provisioning"
-
-	return cluster, err
 }
