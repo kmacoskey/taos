@@ -213,7 +213,7 @@ func (dao *ClusterDao) DeleteCluster(db *sqlx.DB, id string) (*models.Cluster, e
 	logger.Debug("transaction created")
 
 	// Update cluster status to 'deleting' unless it is already 'deleted' or 'deleting'
-	res, err := tx.Exec(`UPDATE clusters SET status = $2 WHERE id = $1 AND status NOT IN ('deleted', 'deleting')`, id, "deleting")
+	res, err := tx.Exec(`UPDATE clusters SET status = $2 WHERE id = $1 AND status NOT IN ('destroyed', 'destroying')`, id, "destroying")
 	if err != nil {
 		tx.Rollback()
 		logger.Debug("transaction rolledback")

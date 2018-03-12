@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
 	"github.com/kmacoskey/taos/app"
@@ -29,10 +30,29 @@ func NewClusterHandler(cs clusterService) *ClusterHandler {
 	return &ClusterHandler{cs}
 }
 
-// ClusterList represents a list of returned Clusters
-type ClusterList struct {
-	TotalCount int         `json:"total_count"`
-	Clusters   interface{} `json:"clusters"`
+type RequestResponse struct {
+	RequestId string       `json:"request_id"`
+	Status    string       `json:"status"`
+	Data      ResponseData `json:"data"`
+}
+
+type ResponseData struct {
+	Type       string `json:"type"`
+	Attributes interface{}
+}
+
+type ResponseAttributes interface {
+}
+
+type ClusterResponse struct {
+	Id     string `json:"id"`
+	Name   string `json:"name"`
+	Status string `json:"status"`
+}
+
+type ErrorResponse struct {
+	Title  string `json:"title"`
+	Detail string `json:"detail"`
 }
 
 func ServeClusterResources(router *mux.Router, db *sqlx.DB) {
@@ -76,16 +96,66 @@ func (ch *ClusterHandler) CreateCluster() app.Adapter {
 
 			rc := app.GetRequestContext(r)
 
+			request_id := uuid.New()
+
 			body, _ := ioutil.ReadAll(r.Body)
 			rc.SetTerraformConfig(body)
 
 			cluster, err := ch.cs.CreateCluster(rc)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				logger.Error("could not create cluster")
+
+			rd := ResponseData{}
+
+			if len(body) <= 0 {
+				er := ErrorResponse{
+					Title:  "incorrect_request_paramaters",
+					Detail: "Missing required terraform configuration for create cluster request",
+				}
+
+				rd = ResponseData{
+					Type:       "error",
+					Attributes: er,
+				}
+
+				w.WriteHeader(http.StatusBadRequest)
+
+			} else if cluster != nil {
+
+				cr := ClusterResponse{
+					Id:     cluster.Id,
+					Name:   cluster.Name,
+					Status: cluster.Status,
+				}
+
+				rd = ResponseData{
+					Type:       "cluster",
+					Attributes: cr,
+				}
+
+				w.WriteHeader(http.StatusAccepted)
+
+			} else {
+
+				er := ErrorResponse{
+					Title:  "create_cluster_error",
+					Detail: "Failed to create cluster",
+				}
+
+				rd = ResponseData{
+					Type:       "error",
+					Attributes: er,
+				}
+
+				w.WriteHeader(http.StatusInternalServerError)
+
 			}
 
-			js, err := json.Marshal(cluster)
+			rr := RequestResponse{
+				RequestId: request_id.String(),
+				Status:    "foo",
+				Data:      rd,
+			}
+
+			js, err := json.Marshal(rr)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				logger.Panic("failed to marshal cluster data for response")
@@ -110,17 +180,81 @@ func (ch *ClusterHandler) GetCluster() app.Adapter {
 
 			vars := mux.Vars(r)
 			rc := app.GetRequestContext(r)
+			request_id := uuid.New()
 
 			id := vars["id"]
 
 			cluster, err := ch.cs.GetCluster(rc, id)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusNotFound)
 				logger.Debug("could not retrieve cluster for given id in request")
-				return
 			}
 
-			js, err := json.Marshal(cluster)
+			rd := ResponseData{}
+
+			if len(id) <= 0 {
+				er := ErrorResponse{
+					Title:  "incorrect_request_paramaters",
+					Detail: "Missing required cluster id",
+				}
+
+				rd = ResponseData{
+					Type:       "error",
+					Attributes: er,
+				}
+
+				w.WriteHeader(http.StatusBadRequest)
+
+			} else if cluster != nil {
+
+				cr := ClusterResponse{
+					Id:     cluster.Id,
+					Name:   cluster.Name,
+					Status: cluster.Status,
+				}
+
+				rd = ResponseData{
+					Type:       "cluster",
+					Attributes: cr,
+				}
+
+				w.WriteHeader(http.StatusOK)
+
+			} else if err == nil && cluster == nil {
+				er := ErrorResponse{
+					Title:  "get_cluster_error",
+					Detail: "Cluster does not exist",
+				}
+
+				rd = ResponseData{
+					Type:       "error",
+					Attributes: er,
+				}
+
+				w.WriteHeader(http.StatusNotFound)
+
+			} else if err != nil {
+
+				er := ErrorResponse{
+					Title:  "get_cluster_error",
+					Detail: err.Error(),
+				}
+
+				rd = ResponseData{
+					Type:       "error",
+					Attributes: er,
+				}
+
+				w.WriteHeader(http.StatusInternalServerError)
+
+			}
+
+			rr := RequestResponse{
+				RequestId: request_id.String(),
+				Status:    "foo",
+				Data:      rd,
+			}
+
+			js, err := json.Marshal(rr)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				logger.Panic("failed to marshal cluster data for response")
@@ -142,19 +276,55 @@ func (ch *ClusterHandler) GetClusters() app.Adapter {
 			})
 
 			rc := app.GetRequestContext(r)
+			request_id := uuid.New()
+			rd := ResponseData{}
 
 			clusters, err := ch.cs.GetClusters(rc)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				logger.Error("could not retrieve clusters")
+
+			if clusters != nil {
+
+				cluster_list := []ClusterResponse{}
+
+				for _, cluster := range clusters {
+					cr := ClusterResponse{
+						Id:     cluster.Id,
+						Name:   cluster.Name,
+						Status: cluster.Status,
+					}
+
+					cluster_list = append(cluster_list, cr)
+				}
+
+				rd = ResponseData{
+					Type:       "clusters",
+					Attributes: cluster_list,
+				}
+
+				w.WriteHeader(http.StatusOK)
+
+			} else if err != nil {
+
+				er := ErrorResponse{
+					Title:  "get_clusters_error",
+					Detail: err.Error(),
+				}
+
+				rd = ResponseData{
+					Type:       "error",
+					Attributes: er,
+				}
+
+				w.WriteHeader(http.StatusInternalServerError)
+
 			}
 
-			var clusterlist = ClusterList{
-				TotalCount: len(clusters),
-				Clusters:   clusters,
+			rr := RequestResponse{
+				RequestId: request_id.String(),
+				Status:    "foo",
+				Data:      rd,
 			}
 
-			js, err := json.Marshal(clusterlist)
+			js, err := json.Marshal(rr)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				logger.Panic("failed to marshal cluster data for response")
@@ -179,25 +349,84 @@ func (ch *ClusterHandler) DeleteCluster() app.Adapter {
 
 			vars := mux.Vars(r)
 			rc := app.GetRequestContext(r)
+			rd := ResponseData{}
+			request_id := uuid.New()
 
 			id := vars["id"]
 
 			cluster, err := ch.cs.DeleteCluster(rc, id)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusNotFound)
-				logger.Debug("could not retrieve cluster for given id in request")
-			}
 
-			if cluster != nil {
-				js, err := json.Marshal(cluster)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					logger.Panic("failed to marshal cluster data for response")
+			if len(id) <= 0 {
+				er := ErrorResponse{
+					Title:  "incorrect_request_paramaters",
+					Detail: "Missing required cluster id",
 				}
 
-				w.Header().Set("Content-Type", "application/json")
-				w.Write(js)
+				rd = ResponseData{
+					Type:       "error",
+					Attributes: er,
+				}
+
+				w.WriteHeader(http.StatusBadRequest)
+
+			} else if cluster != nil {
+
+				cr := ClusterResponse{
+					Id:     cluster.Id,
+					Name:   cluster.Name,
+					Status: cluster.Status,
+				}
+
+				rd = ResponseData{
+					Type:       "cluster",
+					Attributes: cr,
+				}
+
+				w.WriteHeader(http.StatusAccepted)
+
+			} else if err == nil && cluster == nil {
+				er := ErrorResponse{
+					Title:  "delete_cluster_error",
+					Detail: "Cluster does not exist",
+				}
+
+				rd = ResponseData{
+					Type:       "error",
+					Attributes: er,
+				}
+
+				w.WriteHeader(http.StatusNotFound)
+
+			} else if err != nil {
+
+				er := ErrorResponse{
+					Title:  "delete_cluster_error",
+					Detail: err.Error(),
+				}
+
+				rd = ResponseData{
+					Type:       "error",
+					Attributes: er,
+				}
+
+				w.WriteHeader(http.StatusInternalServerError)
+
 			}
+
+			rr := RequestResponse{
+				RequestId: request_id.String(),
+				Status:    "foo",
+				Data:      rd,
+			}
+
+			js, err := json.Marshal(rr)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				logger.Panic("failed to marshal cluster data for response")
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.Write(js)
 		})
 	}
 }

@@ -88,7 +88,7 @@ var _ = Describe("Cluster", func() {
 					c, err := cs.GetCluster(rc, cluster.Id)
 					Expect(err).NotTo(HaveOccurred())
 					return c.Status
-				}, 2, 0.5).Should(Equal("provision_success"))
+				}, 5, 0.5).Should(Equal("provision_success"))
 			})
 		})
 

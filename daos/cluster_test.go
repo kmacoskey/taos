@@ -154,7 +154,7 @@ var _ = Describe("Cluster", func() {
 				Expect(cluster.Id).To(Equal(cluster1.Id))
 			})
 			It("The returned cluster should have a deleting status", func() {
-				Expect(cluster.Status).To(Equal("deleting"))
+				Expect(cluster.Status).To(Equal("destroying"))
 			})
 		})
 
@@ -172,7 +172,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("When deleting a cluster that has already been deleted", func() {
 			BeforeEach(func() {
-				cluster1.Status = "deleted"
+				cluster1.Status = "destroyed"
 				rows, insert_err := db.NamedQuery(`INSERT INTO clusters (id,name,status) VALUES (:id,:name,:status) RETURNING id`, cluster1)
 				Expect(insert_err).NotTo(HaveOccurred())
 				if rows.Next() {
@@ -190,7 +190,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("When deleting a cluster that is already deleting", func() {
 			BeforeEach(func() {
-				cluster1.Status = "deleting"
+				cluster1.Status = "destroying"
 				rows, insert_err := db.NamedQuery(`INSERT INTO clusters (id,name,status) VALUES (:id,:name,:status) RETURNING id`, cluster1)
 				Expect(insert_err).NotTo(HaveOccurred())
 				if rows.Next() {
