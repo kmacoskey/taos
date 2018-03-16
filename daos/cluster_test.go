@@ -402,11 +402,17 @@ var _ = Describe("Cluster", func() {
 				}
 				cluster, err = dao.DeleteCluster(db, id)
 			})
-			It("Should error", func() {
-				Expect(err).To(HaveOccurred())
+			It("Should not error", func() {
+				Expect(err).NotTo(HaveOccurred())
 			})
-			It("Should not return a cluster", func() {
-				Expect(cluster).Should(BeNil())
+			It("Should return a cluster", func() {
+				Expect(cluster).NotTo(BeNil())
+			})
+			It("Should return the expected cluster", func() {
+				Expect(cluster.Id).To(Equal(cluster1.Id))
+			})
+			It("The returned cluster should be getting destroyed", func() {
+				Expect(cluster.Status).To(Equal("destroying"))
 			})
 		})
 

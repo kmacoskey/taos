@@ -235,8 +235,8 @@ func (dao *ClusterDao) DeleteCluster(db *sqlx.DB, id string) (*models.Cluster, e
 	}
 	logger.Debug("transaction created")
 
-	logger.Debug(fmt.Sprintf("UPDATE clusters SET status = '%s' WHERE id = '%s' AND status NOT IN ('destroyed', 'destroying') RETURNING *", "destroying", id))
-	rows, err := tx.Queryx(`UPDATE clusters SET status = $1 WHERE id = $2 AND status NOT IN ('destroyed', 'destroying') RETURNING *`, "destroying", id)
+	logger.Debug(fmt.Sprintf("UPDATE clusters SET status = '%s' WHERE id = '%s' AND status NOT IN ('destroyed') RETURNING *", "destroying", id))
+	rows, err := tx.Queryx(`UPDATE clusters SET status = $1 WHERE id = $2 AND status NOT IN ('destroyed') RETURNING *`, "destroying", id)
 	if err != nil {
 		logger.Debug(fmt.Sprintf("could not update cluster status to 'destroyed': '%v'", err.Error()))
 		tx.Rollback()
