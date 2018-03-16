@@ -63,8 +63,8 @@ var _ = Describe("Cluster", func() {
 	//
 	// ======================================================================
 
-	Describe("Creating a Valid Cluster", func() {
-		Context("A cluster is returned from the dao", func() {
+	Describe("Creating a cluster", func() {
+		Context("When everything goes ok", func() {
 			BeforeEach(func() {
 				clustersMap := make(map[string]*models.Cluster)
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
@@ -77,10 +77,7 @@ var _ = Describe("Cluster", func() {
 			It("Should return a cluster", func() {
 				Expect(cluster).NotTo(BeNil())
 			})
-			It("Should have a cluster returned with status provisioning", func() {
-				Expect(cluster.Status).To(Equal("provisioning"))
-			})
-			It("Should set the cluster status in the daos", func() {
+			It("Should return as provisioning", func() {
 				Expect(cluster.Status).To(Equal("provisioning"))
 			})
 			It("Should eventually be provisioned", func() {
@@ -92,32 +89,30 @@ var _ = Describe("Cluster", func() {
 			})
 		})
 
-		Context("A cluster is not returned from the dao", func() {
+		Context("When a cluster is not returned from the dao", func() {
 			BeforeEach(func() {
 				cs = NewClusterService(NewEmptyClusterDao(), NewMockDB().db)
 				cluster, err = cs.CreateCluster(rc)
 			})
-			It("Should return an empty Cluster", func() {
-				Expect(cluster).To(Equal(&models.Cluster{}))
-			})
-			It("should error", func() {
+			It("Should error", func() {
 				Expect(err).Should(HaveOccurred())
 			})
+			It("Should not return a cluster", func() {
+				Expect(cluster).To(BeNil())
+			})
 		})
-	})
 
-	Describe("Creating an Invalid Cluster", func() {
-		Context("Invalid terraform config is used", func() {
+		Context("When invalid terraform config is used", func() {
 			BeforeEach(func() {
 				clustersMap := make(map[string]*models.Cluster)
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
 				rc.SetTerraformConfig(invalidTerraformConfig)
 				cluster, err = cs.CreateCluster(rc)
 			})
-			It("Should not return an error when requested", func() {
+			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
-			It("Should eventually change status", func() {
+			It("Should eventually change status to reflect an error", func() {
 				Eventually(func() string {
 					c, err := cs.GetCluster(rc, cluster.Id)
 					Expect(err).NotTo(HaveOccurred())
@@ -125,6 +120,7 @@ var _ = Describe("Cluster", func() {
 				}, 2, 0.5).Should(Equal("provision_failed"))
 			})
 		})
+
 	})
 
 	// ======================================================================
@@ -137,28 +133,35 @@ var _ = Describe("Cluster", func() {
 	//
 	// ======================================================================
 
-	Describe("Retrieving a Cluster for a specific id", func() {
-		Context("A cluster is returned from the dao", func() {
+	Describe("Getting a cluster", func() {
+		Context("When everything goes ok", func() {
 			BeforeEach(func() {
 				clustersMap := make(map[string]*models.Cluster)
-				clustersMap["a19e2758-0ec5-11e8-ba89-0ed5f89f718b"] = cluster1
+				clustersMap[cluster1.Id] = cluster1
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
+				cluster, err = cs.GetCluster(rc, cluster1.Id)
 			})
-			It("Should return a cluster of the same id", func() {
-				Expect(cs.GetCluster(rc, "a19e2758-0ec5-11e8-ba89-0ed5f89f718b")).To(Equal(cluster1))
+			It("Should not error", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+			It("Should return a cluster", func() {
+				Expect(cluster).NotTo(BeNil())
+			})
+			It("Should return the expected cluster", func() {
+				Expect(cluster.Id).To(Equal(cluster1.Id))
 			})
 		})
 
-		Context("A cluster is not returned from the dao", func() {
+		Context("When the cluster does not exist", func() {
 			BeforeEach(func() {
 				cs = NewClusterService(NewEmptyClusterDao(), NewMockDB().db)
-				cluster1, err = cs.GetCluster(rc, "a19e2758-0ec5-11e8-ba89-0ed5f89f718b")
+				cluster, err = cs.GetCluster(rc, cluster1.Id)
 			})
-			It("Should return an empty Cluster", func() {
-				Expect(cluster1).To(Equal(&models.Cluster{}))
-			})
-			It("should error", func() {
+			It("Should error", func() {
 				Expect(err).Should(HaveOccurred())
+			})
+			It("Should not return a cluster", func() {
+				Expect(cluster).To(BeNil())
 			})
 		})
 	})
@@ -173,30 +176,40 @@ var _ = Describe("Cluster", func() {
 	//
 	// ======================================================================
 
-	Describe("Retrieving all clusters", func() {
-		Context("When Clusters are returned from the dao", func() {
+	Describe("Getting all clusters", func() {
+		Context("When everything goes ok", func() {
 			BeforeEach(func() {
 				clustersMap := make(map[string]*models.Cluster)
+				clustersMap[cluster1.Id] = cluster1
+				clustersMap[cluster2.Id] = cluster2
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
+				clusters, err = cs.GetClusters(rc)
 			})
-			It("Should return a slice of all clusters", func() {
-				Expect(cs.GetClusters(rc)).To(HaveLen(2))
+			It("Should not error", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+			It("Should return clusters", func() {
+				Expect(clusters).To(HaveLen(2))
+			})
+			It("Should return the expected clusters", func() {
+				Expect(clusters).To(ContainElement(*cluster1))
+				Expect(clusters).To(ContainElement(*cluster2))
 			})
 		})
 
-		Context("When no Clusters are returned from the dao", func() {
+		Context("When there are no clusters", func() {
 			BeforeEach(func() {
 				cs = NewClusterService(NewEmptyClusterDao(), NewMockDB().db)
 				clusters, err = cs.GetClusters(rc)
 			})
-			It("Should return an empty list of Clusters", func() {
-				Expect(clusters).To(HaveLen(0))
-			})
 			It("should not error", func() {
 				Expect(err).ShouldNot(HaveOccurred())
 			})
-
+			It("Should return an empty list of Clusters", func() {
+				Expect(clusters).To(HaveLen(0))
+			})
 		})
+
 	})
 
 	// ======================================================================
@@ -208,8 +221,8 @@ var _ = Describe("Cluster", func() {
 	//
 	// ======================================================================
 
-	Describe("Deleting a Cluster", func() {
-		Context("That exists", func() {
+	Describe("Deleting a cluster", func() {
+		Context("When everything goes ok", func() {
 			BeforeEach(func() {
 				clustersMap := make(map[string]*models.Cluster)
 				clustersMap[cluster1UUID] = cluster1
@@ -219,31 +232,31 @@ var _ = Describe("Cluster", func() {
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
-			It("Should return the same cluster", func() {
+			It("Should return the expected cluster", func() {
 				Expect(cluster.Id).To(Equal(cluster1.Id))
 			})
-			It("The returned cluster should have a deleting status", func() {
+			It("The should be destroying", func() {
 				Expect(cluster.Status).To(Equal("destroying"))
 			})
-			It("Should eventually be deleted", func() {
+			It("Should eventually be destroyed", func() {
 				Eventually(func() string {
 					c, err := cs.GetCluster(rc, cluster.Id)
 					Expect(err).NotTo(HaveOccurred())
 					return c.Status
-				}, 2, 0.5).Should(Equal("destroyed"))
+				}, 3, 0.5).Should(Equal("destroyed"))
 			})
 		})
 
-		Context("That doesn't exist", func() {
+		Context("When it does not exist", func() {
 			BeforeEach(func() {
 				clustersMap := make(map[string]*models.Cluster)
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
-				cluster, err = cs.DeleteCluster(rc, cluster1UUID)
+				cluster, err = cs.DeleteCluster(rc, cluster1.Id)
 			})
 			It("should error", func() {
 				Expect(err).Should(HaveOccurred())
 			})
-			It("Should return a nil cluster", func() {
+			It("Should not return a cluster", func() {
 				Expect(cluster).To(BeNil())
 			})
 		})
@@ -252,18 +265,15 @@ var _ = Describe("Cluster", func() {
 			BeforeEach(func() {
 				clustersMap := make(map[string]*models.Cluster)
 				cluster1.Status = "destroyed"
-				clustersMap[cluster1UUID] = cluster1
+				clustersMap[cluster1.Id] = cluster1
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
-				cluster, err = cs.DeleteCluster(rc, cluster1UUID)
+				cluster, err = cs.DeleteCluster(rc, cluster1.Id)
 			})
 			It("Should error", func() {
-				Expect(err).NotTo(HaveOccurred())
+				Expect(err).To(HaveOccurred())
 			})
-			It("Should not change status of the original cluster", func() {
-				Expect(cluster.Status).To(Equal(cluster1.Status))
-			})
-			It("Should return the original cluster", func() {
-				Expect(cluster.Id).To(Equal(cluster1.Id))
+			It("Should not return a cluster", func() {
+				Expect(cluster).To(BeNil())
 			})
 		})
 	})
@@ -310,9 +320,9 @@ func (dao *ValidClusterDao) GetCluster(db *sqlx.DB, id string) (*models.Cluster,
 
 func (dao *ValidClusterDao) GetClusters(db *sqlx.DB) ([]models.Cluster, error) {
 	clusters := []models.Cluster{}
-	cluster := models.Cluster{}
-	clusters = append(clusters, cluster)
-	clusters = append(clusters, cluster)
+	for _, cluster := range dao.clustersMap {
+		clusters = append(clusters, *cluster)
+	}
 	return clusters, nil
 }
 
@@ -334,7 +344,7 @@ func NewEmptyClusterDao() *EmptyClusterDao {
 }
 
 func (dao *EmptyClusterDao) CreateCluster(db *sqlx.DB, config []byte) (*models.Cluster, error) {
-	return &models.Cluster{}, errors.New("foo")
+	return nil, errors.New("foo")
 }
 
 func (dao *EmptyClusterDao) UpdateCluster(db *sqlx.DB, cluster *models.Cluster) (*models.Cluster, error) {
@@ -342,7 +352,7 @@ func (dao *EmptyClusterDao) UpdateCluster(db *sqlx.DB, cluster *models.Cluster) 
 }
 
 func (dao *EmptyClusterDao) GetCluster(db *sqlx.DB, id string) (*models.Cluster, error) {
-	return &models.Cluster{}, errors.New("foo")
+	return nil, errors.New("foo")
 }
 
 func (dao *EmptyClusterDao) GetClusters(db *sqlx.DB) ([]models.Cluster, error) {

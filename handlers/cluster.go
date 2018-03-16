@@ -340,82 +340,83 @@ func (ch *ClusterHandler) GetClusters() app.Adapter {
 func (ch *ClusterHandler) DeleteCluster() app.Adapter {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			vars := mux.Vars(r)
+			id := vars["id"]
+
+			// Setup logger after retrieving id from request vars
+			//  in order to log a context of the id of the request
 			logger := log.WithFields(log.Fields{
 				"topic":   "taos",
 				"package": "handlers",
-				"context": "cluster_handler",
-				"event":   "deletecluster",
+				"event":   "delete_cluster",
+				"context": id,
 			})
 
-			vars := mux.Vars(r)
 			rc := app.GetRequestContext(r)
 			rd := ResponseData{}
+			cr := ClusterResponse{}
+			er := ErrorResponse{}
+
 			request_id := uuid.New()
 
-			id := vars["id"]
+			logger.Debug("client request to destroy cluster")
 
 			cluster, err := ch.cs.DeleteCluster(rc, id)
 
 			if len(id) <= 0 {
-				er := ErrorResponse{
+				// id is missing in request
+				er = ErrorResponse{
 					Title:  "incorrect_request_paramaters",
-					Detail: "Missing required cluster id",
+					Detail: "missing required cluster id",
 				}
-
-				rd = ResponseData{
-					Type:       "error",
-					Attributes: er,
-				}
-
+				logger.Debug("missing required cluster id")
 				w.WriteHeader(http.StatusBadRequest)
 
 			} else if cluster != nil {
-
-				cr := ClusterResponse{
+				// Cluster exists
+				cr = ClusterResponse{
 					Id:     cluster.Id,
 					Name:   cluster.Name,
 					Status: cluster.Status,
 				}
-
-				rd = ResponseData{
-					Type:       "cluster",
-					Attributes: cr,
-				}
-
+				logger.Debug("responding with deleted cluster")
 				w.WriteHeader(http.StatusAccepted)
 
 			} else if err == nil && cluster == nil {
-				er := ErrorResponse{
+				// Cluster does not exist
+				er = ErrorResponse{
 					Title:  "delete_cluster_error",
 					Detail: "Cluster does not exist",
 				}
-
-				rd = ResponseData{
-					Type:       "error",
-					Attributes: er,
-				}
-
+				logger.Debug("cluster does not exist")
 				w.WriteHeader(http.StatusNotFound)
 
 			} else if err != nil {
-
-				er := ErrorResponse{
+				er = ErrorResponse{
 					Title:  "delete_cluster_error",
 					Detail: err.Error(),
 				}
-
-				rd = ResponseData{
-					Type:       "error",
-					Attributes: er,
-				}
-
+				logger.Debug(err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
 
 			}
 
+			// Choose response data type based
+			//  on results returned from service request
+			if cluster != nil {
+				rd = ResponseData{
+					Type:       "cluster",
+					Attributes: cr,
+				}
+			} else {
+				rd = ResponseData{
+					Type:       "error",
+					Attributes: er,
+				}
+			}
+
 			rr := RequestResponse{
 				RequestId: request_id.String(),
-				Status:    "foo",
 				Data:      rd,
 			}
 

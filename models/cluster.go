@@ -6,3 +6,7 @@ type Cluster struct {
 	Status          string `json:"status" db:"status"`
 	TerraformConfig []byte `json:"terraform_config" db:"terraform_config"`
 }
+
+const (
+	ClusterStatusRequested = "requested"
+)

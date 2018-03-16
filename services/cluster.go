@@ -1,12 +1,14 @@
 package services
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/kmacoskey/taos/app"
 	"github.com/kmacoskey/taos/models"
 	"github.com/kmacoskey/taos/terraform"
+	log "github.com/sirupsen/logrus"
 )
 
 type clusterDao interface {
@@ -37,11 +39,41 @@ func (s *ClusterService) GetClusters(rc app.RequestContext) ([]models.Cluster, e
 }
 
 func (s *ClusterService) DeleteCluster(rc app.RequestContext, id string) (*models.Cluster, error) {
-	cluster, err := s.dao.DeleteCluster(s.db, id)
+	logger := log.WithFields(log.Fields{
+		"topic":   "taos",
+		"package": "services",
+		"event":   "delete_cluster",
+		"context": id,
+	})
+
+	logger.Debug("service request to destroy cluster")
+
+	cluster, err := s.dao.GetCluster(s.db, id)
 	if err != nil {
-		return cluster, err
+		logger.Debug("cluster destroying failed")
+		return nil, errors.New(fmt.Sprintf("cluster destroying failed: %s", err.Error()))
 	}
 
+	if cluster == nil {
+		logger.Debug("no cluster set to destroy")
+		return nil, errors.New("cannot destroy cluster that does not exist")
+	}
+
+	switch cluster.Status {
+	case "destroying", "destroyed":
+		logger.Debug("no cluster set to destroy")
+		return nil, errors.New("cannot destroy cluster that is already 'destroying' or 'destroyed'")
+	}
+
+	cluster.Status = "destroying"
+
+	updated_cluster, err := s.dao.UpdateCluster(s.db, cluster)
+	if err != nil {
+		logger.Debug(fmt.Sprintf("failed to update cluster status: %v", err))
+		return updated_cluster, err
+	}
+
+	logger.Debug("cluster set to destroy")
 	go s.TerraformDestroyCluster(cluster)
 
 	return s.dao.DeleteCluster(s.db, id)
