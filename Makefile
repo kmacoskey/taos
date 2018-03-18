@@ -3,6 +3,8 @@
 # PACKAGES:=$(shell go list ./... | sed -n '1!p' | grep -v /vendor/ | sed 's!.*/!!')
 LDFLAGS:=-ldflags "-X github.com/kmacoskey/taos/app.Version=${VERSION}"
 
+.PHONY: test clean
+
 default: build
 
 depends:

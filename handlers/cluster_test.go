@@ -5,6 +5,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 
 	"context"
 	"encoding/json"
@@ -40,6 +41,7 @@ var _ = Describe("Cluster", func() {
 	)
 
 	BeforeEach(func() {
+		log.SetLevel(log.FatalLevel)
 		cluster1 = &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
 		cluster2 = &models.Cluster{Id: "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
 		cluster1_json, err = json.Marshal(cluster1)

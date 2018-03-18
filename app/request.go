@@ -74,18 +74,10 @@ func (rs *RequestContext) SetTerraformConfig(tfcfg []byte) {
 	rs.terraformConfig = tfcfg
 }
 
-func (rs *RequestContext) Rollback() bool {
-	return rs.rollback
-}
-
-func (rs *RequestContext) SetRollback(v bool) {
-	rs.rollback = v
-}
-
 func (rs *RequestContext) RequestTime() time.Time {
 	return rs.requestTime
 }
 
-func (rs *RequestContext) RequestID() string {
+func (rs *RequestContext) RequestId() string {
 	return rs.requestID
 }

@@ -2,10 +2,10 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
 	"github.com/kmacoskey/taos/app"
@@ -26,10 +26,6 @@ type ClusterHandler struct {
 	cs clusterService
 }
 
-func NewClusterHandler(cs clusterService) *ClusterHandler {
-	return &ClusterHandler{cs}
-}
-
 type RequestResponse struct {
 	RequestId string       `json:"request_id"`
 	Status    string       `json:"status"`
@@ -41,8 +37,7 @@ type ResponseData struct {
 	Attributes interface{}
 }
 
-type ResponseAttributes interface {
-}
+type ResponseAttributes interface{}
 
 type ClusterResponse struct {
 	Id     string `json:"id"`
@@ -53,6 +48,10 @@ type ClusterResponse struct {
 type ErrorResponse struct {
 	Title  string `json:"title"`
 	Detail string `json:"detail"`
+}
+
+func NewClusterHandler(cs clusterService) *ClusterHandler {
+	return &ClusterHandler{cs}
 }
 
 func ServeClusterResources(router *mux.Router, db *sqlx.DB) {
@@ -83,86 +82,78 @@ func ServeClusterResources(router *mux.Router, db *sqlx.DB) {
 	)).Methods("DELETE")
 }
 
+func newErrorResponse(response *ErrorResponse, request_id string) *RequestResponse {
+	response_data := ResponseData{
+		Type:       "error",
+		Attributes: response,
+	}
+
+	request_response := RequestResponse{
+		RequestId: request_id,
+		Data:      response_data,
+	}
+
+	return &request_response
+}
+
 // Request provisioning of a new Cluster
 func (ch *ClusterHandler) CreateCluster() app.Adapter {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			context := app.GetRequestContext(r)
+
 			logger := log.WithFields(log.Fields{
 				"topic":   "taos",
 				"package": "handlers",
-				"context": "cluster_handler",
 				"event":   "create_cluster",
+				"request": context.RequestId(),
 			})
 
-			rc := app.GetRequestContext(r)
+			elogger := log.WithFields(log.Fields{
+				"topic":   "taos",
+				"package": "handlers",
+				"event":   "create_cluster_error",
+				"request": context.RequestId(),
+			})
 
-			request_id := uuid.New()
+			logger.Info("request new cluster")
 
 			body, _ := ioutil.ReadAll(r.Body)
-			rc.SetTerraformConfig(body)
 
-			cluster, err := ch.cs.CreateCluster(rc)
-
-			rd := ResponseData{}
-
+			// Will not continue if missing terraform configuration in request
 			if len(body) <= 0 {
-				er := ErrorResponse{
-					Title:  "incorrect_request_paramaters",
+				response := ErrorResponse{
+					Title:  "create_cluster_error",
 					Detail: "Missing required terraform configuration for create cluster request",
 				}
 
-				rd = ResponseData{
-					Type:       "error",
-					Attributes: er,
-				}
-
-				w.WriteHeader(http.StatusBadRequest)
-
-			} else if cluster != nil {
-
-				cr := ClusterResponse{
-					Id:     cluster.Id,
-					Name:   cluster.Name,
-					Status: cluster.Status,
-				}
-
-				rd = ResponseData{
-					Type:       "cluster",
-					Attributes: cr,
-				}
-
-				w.WriteHeader(http.StatusAccepted)
-
-			} else {
-
-				er := ErrorResponse{
-					Title:  "create_cluster_error",
-					Detail: "Failed to create cluster",
-				}
-
-				rd = ResponseData{
-					Type:       "error",
-					Attributes: er,
-				}
-
-				w.WriteHeader(http.StatusInternalServerError)
-
+				elogger.Error("missing terraform config")
+				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusBadRequest)
+				return
 			}
 
-			rr := RequestResponse{
-				RequestId: request_id.String(),
-				Status:    "foo",
-				Data:      rd,
-			}
+			context.SetTerraformConfig(body)
 
-			js, err := json.Marshal(rr)
+			cluster, err := ch.cs.CreateCluster(context)
+			// Internal error in any layer below handler
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				logger.Panic("failed to marshal cluster data for response")
+				response := ErrorResponse{
+					Title:  "create_cluster_error",
+					Detail: err.Error(),
+				}
+
+				elogger.Error(err.Error())
+				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusInternalServerError)
+				return
 			}
 
-			w.Header().Set("Content-Type", "application/json")
-			w.Write(js)
+			// No expectation for the situation that
+			// 	err == nil && cluster == nil
+			// Currently if a cluster is not returned, then something went wrong
+			// Eventually this may capture the situation where resources are not available
+
+			logger.Info("cluster created")
+			respondWithJson(w, newClusterResponse(cluster, context.RequestId()), http.StatusAccepted)
 		})
 	}
 }
@@ -171,97 +162,66 @@ func (ch *ClusterHandler) CreateCluster() app.Adapter {
 func (ch *ClusterHandler) GetCluster() app.Adapter {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			context := app.GetRequestContext(r)
+
 			logger := log.WithFields(log.Fields{
 				"topic":   "taos",
 				"package": "handlers",
-				"context": "cluster_handler",
-				"event":   "getcluster",
+				"event":   "get_cluster",
+				"request": context.RequestId(),
+			})
+
+			elogger := log.WithFields(log.Fields{
+				"topic":   "taos",
+				"package": "handlers",
+				"event":   "get_cluster_error",
+				"request": context.RequestId(),
 			})
 
 			vars := mux.Vars(r)
-			rc := app.GetRequestContext(r)
-			request_id := uuid.New()
-
 			id := vars["id"]
 
-			cluster, err := ch.cs.GetCluster(rc, id)
-			if err != nil {
-				logger.Debug("could not retrieve cluster for given id in request")
-			}
+			logger.Info(fmt.Sprintf("get cluster '%s'", id))
 
-			rd := ResponseData{}
-
+			// Will not continue if missing id in request
 			if len(id) <= 0 {
-				er := ErrorResponse{
-					Title:  "incorrect_request_paramaters",
+				response := ErrorResponse{
+					Title:  "get_cluster_error",
 					Detail: "Missing required cluster id",
 				}
 
-				rd = ResponseData{
-					Type:       "error",
-					Attributes: er,
-				}
+				elogger.Error("missing id")
+				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusBadRequest)
+				return
+			}
 
-				w.WriteHeader(http.StatusBadRequest)
-
-			} else if cluster != nil {
-
-				cr := ClusterResponse{
-					Id:     cluster.Id,
-					Name:   cluster.Name,
-					Status: cluster.Status,
-				}
-
-				rd = ResponseData{
-					Type:       "cluster",
-					Attributes: cr,
-				}
-
-				w.WriteHeader(http.StatusOK)
-
-			} else if err == nil && cluster == nil {
-				er := ErrorResponse{
-					Title:  "get_cluster_error",
-					Detail: "Cluster does not exist",
-				}
-
-				rd = ResponseData{
-					Type:       "error",
-					Attributes: er,
-				}
-
-				w.WriteHeader(http.StatusNotFound)
-
-			} else if err != nil {
-
-				er := ErrorResponse{
+			cluster, err := ch.cs.GetCluster(context, id)
+			// Internal error in any layer below handler
+			if err != nil {
+				response := ErrorResponse{
 					Title:  "get_cluster_error",
 					Detail: err.Error(),
 				}
 
-				rd = ResponseData{
-					Type:       "error",
-					Attributes: er,
+				elogger.Error(err.Error())
+				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusInternalServerError)
+				return
+			}
+
+			// Cluster does not exist
+			if cluster == nil {
+				response := ErrorResponse{
+					Title:  "get_cluster_error",
+					Detail: "cluster not found",
 				}
 
-				w.WriteHeader(http.StatusInternalServerError)
-
+				elogger.Error("cluster not found")
+				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusNotFound)
+				return
 			}
 
-			rr := RequestResponse{
-				RequestId: request_id.String(),
-				Status:    "foo",
-				Data:      rd,
-			}
-
-			js, err := json.Marshal(rr)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				logger.Panic("failed to marshal cluster data for response")
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			w.Write(js)
+			logger.Info("returning cluster")
+			respondWithJson(w, newClusterResponse(cluster, context.RequestId()), http.StatusOK)
 		})
 	}
 }
@@ -270,164 +230,175 @@ func (ch *ClusterHandler) GetCluster() app.Adapter {
 func (ch *ClusterHandler) GetClusters() app.Adapter {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			context := app.GetRequestContext(r)
+
 			logger := log.WithFields(log.Fields{
-				"topic": "taos",
-				"event": "cluster_handler",
+				"topic":   "taos",
+				"package": "handlers",
+				"event":   "get_clusters",
+				"request": context.RequestId(),
 			})
 
-			rc := app.GetRequestContext(r)
-			request_id := uuid.New()
-			rd := ResponseData{}
+			elogger := log.WithFields(log.Fields{
+				"topic":   "taos",
+				"package": "handlers",
+				"event":   "get_clusters_error",
+				"request": context.RequestId(),
+			})
 
-			clusters, err := ch.cs.GetClusters(rc)
-
-			if clusters != nil {
-
-				cluster_list := []ClusterResponse{}
-
-				for _, cluster := range clusters {
-					cr := ClusterResponse{
-						Id:     cluster.Id,
-						Name:   cluster.Name,
-						Status: cluster.Status,
-					}
-
-					cluster_list = append(cluster_list, cr)
-				}
-
-				rd = ResponseData{
-					Type:       "clusters",
-					Attributes: cluster_list,
-				}
-
-				w.WriteHeader(http.StatusOK)
-
-			} else if err != nil {
-
-				er := ErrorResponse{
+			clusters, err := ch.cs.GetClusters(context)
+			// Internal error in any layer below handler
+			if err != nil {
+				response := ErrorResponse{
 					Title:  "get_clusters_error",
 					Detail: err.Error(),
 				}
 
-				rd = ResponseData{
-					Type:       "error",
-					Attributes: er,
+				elogger.Error(err.Error())
+				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusInternalServerError)
+				return
+			}
+
+			// No clusters exists
+			if clusters == nil {
+				response := ErrorResponse{
+					Title:  "get_clusters_error",
+					Detail: "clusters not found",
 				}
 
-				w.WriteHeader(http.StatusInternalServerError)
-
+				elogger.Error("clusters not found")
+				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusNotFound)
+				return
 			}
 
-			rr := RequestResponse{
-				RequestId: request_id.String(),
-				Status:    "foo",
-				Data:      rd,
-			}
-
-			js, err := json.Marshal(rr)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				logger.Panic("failed to marshal cluster data for response")
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			w.Write(js)
+			logger.Info("returning clusters")
+			respondWithJson(w, newClustersResponse(clusters, context.RequestId()), http.StatusOK)
 		})
 	}
 }
 
-// Delete a Cluster for a given id
 func (ch *ClusterHandler) DeleteCluster() app.Adapter {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			vars := mux.Vars(r)
-			id := vars["id"]
+			context := app.GetRequestContext(r)
 
-			// Setup logger after retrieving id from request vars
-			//  in order to log a context of the id of the request
 			logger := log.WithFields(log.Fields{
 				"topic":   "taos",
 				"package": "handlers",
 				"event":   "delete_cluster",
-				"context": id,
+				"request": context.RequestId(),
 			})
 
-			rc := app.GetRequestContext(r)
-			rd := ResponseData{}
-			cr := ClusterResponse{}
-			er := ErrorResponse{}
+			elogger := log.WithFields(log.Fields{
+				"topic":   "taos",
+				"package": "handlers",
+				"event":   "delete_cluster_error",
+				"request": context.RequestId(),
+			})
 
-			request_id := uuid.New()
+			vars := mux.Vars(r)
+			id := vars["id"]
 
-			logger.Debug("client request to destroy cluster")
+			logger.Info(fmt.Sprintf("delete cluster '%s'", id))
 
-			cluster, err := ch.cs.DeleteCluster(rc, id)
-
+			// Will not continue if missing id in request
 			if len(id) <= 0 {
-				// id is missing in request
-				er = ErrorResponse{
-					Title:  "incorrect_request_paramaters",
-					Detail: "missing required cluster id",
-				}
-				logger.Debug("missing required cluster id")
-				w.WriteHeader(http.StatusBadRequest)
-
-			} else if cluster != nil {
-				// Cluster exists
-				cr = ClusterResponse{
-					Id:     cluster.Id,
-					Name:   cluster.Name,
-					Status: cluster.Status,
-				}
-				logger.Debug("responding with deleted cluster")
-				w.WriteHeader(http.StatusAccepted)
-
-			} else if err == nil && cluster == nil {
-				// Cluster does not exist
-				er = ErrorResponse{
+				response := ErrorResponse{
 					Title:  "delete_cluster_error",
-					Detail: "Cluster does not exist",
+					Detail: "Missing required cluster id",
 				}
-				logger.Debug("cluster does not exist")
-				w.WriteHeader(http.StatusNotFound)
 
-			} else if err != nil {
-				er = ErrorResponse{
+				elogger.Error("missing id")
+				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusBadRequest)
+				return
+			}
+
+			cluster, err := ch.cs.DeleteCluster(context, id)
+			// Internal error in any layer below handler
+			if err != nil {
+				response := ErrorResponse{
 					Title:  "delete_cluster_error",
 					Detail: err.Error(),
 				}
-				logger.Debug(err.Error())
-				w.WriteHeader(http.StatusInternalServerError)
 
+				elogger.Error(err.Error())
+				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusInternalServerError)
+				return
 			}
 
-			// Choose response data type based
-			//  on results returned from service request
-			if cluster != nil {
-				rd = ResponseData{
-					Type:       "cluster",
-					Attributes: cr,
+			// Cluster does not exist
+			if cluster == nil {
+				response := ErrorResponse{
+					Title:  "delete_cluster_error",
+					Detail: "cluster not found",
 				}
-			} else {
-				rd = ResponseData{
-					Type:       "error",
-					Attributes: er,
-				}
+
+				elogger.Error("cluster not found")
+				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusNotFound)
+				return
 			}
 
-			rr := RequestResponse{
-				RequestId: request_id.String(),
-				Data:      rd,
-			}
-
-			js, err := json.Marshal(rr)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				logger.Panic("failed to marshal cluster data for response")
-			}
-
-			w.Header().Set("Content-Type", "application/json")
-			w.Write(js)
+			logger.Info("deleting cluster")
+			respondWithJson(w, newClusterResponse(cluster, context.RequestId()), http.StatusAccepted)
 		})
 	}
+}
+
+func newClusterResponse(cluster *models.Cluster, request_id string) *RequestResponse {
+	cluster_response := ClusterResponse{
+		Id:     cluster.Id,
+		Name:   cluster.Name,
+		Status: cluster.Status,
+	}
+
+	response_data := ResponseData{
+		Type:       "cluster",
+		Attributes: cluster_response,
+	}
+
+	request_response := RequestResponse{
+		RequestId: request_id,
+		Data:      response_data,
+	}
+
+	return &request_response
+}
+
+func newClustersResponse(clusters []models.Cluster, request_id string) *RequestResponse {
+
+	cluster_list := []ClusterResponse{}
+
+	for _, cluster := range clusters {
+		cluster_response := ClusterResponse{
+			Id:     cluster.Id,
+			Name:   cluster.Name,
+			Status: cluster.Status,
+		}
+
+		cluster_list = append(cluster_list, cluster_response)
+	}
+
+	response_data := ResponseData{
+		Type:       "clusters",
+		Attributes: cluster_list,
+	}
+
+	request_response := RequestResponse{
+		RequestId: request_id,
+		Data:      response_data,
+	}
+
+	return &request_response
+}
+
+func respondWithJson(w http.ResponseWriter, response *RequestResponse, status int) {
+	js, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		// logger.Panic("failed to marshal cluster data for response")
+	}
+
+	w.WriteHeader(status)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(js)
 }
