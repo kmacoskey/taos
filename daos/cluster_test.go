@@ -3,6 +3,7 @@ package daos_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/kmacoskey/taos/app"
@@ -30,6 +31,8 @@ var (
 )
 
 var _ = BeforeSuite(func() {
+	log.SetLevel(log.FatalLevel)
+
 	err := app.LoadServerConfig(&config, "../")
 	Expect(err).NotTo(HaveOccurred())
 
@@ -54,6 +57,7 @@ var _ = Describe("Cluster", func() {
 		cluster         *models.Cluster
 		cluster1        *models.Cluster
 		cluster2        *models.Cluster
+		requestId       string
 		notacluster     *models.Cluster
 		clusters        []models.Cluster
 		err             error
@@ -64,6 +68,8 @@ var _ = Describe("Cluster", func() {
 
 	BeforeEach(func() {
 		dao = ClusterDao{}
+
+		requestId = "c12c2d58-2af0-11e8-b467-0ed5f89f718b"
 
 		// Create a fresh transaction for each test
 		tx, err = db.Beginx()
@@ -92,7 +98,7 @@ var _ = Describe("Cluster", func() {
 	Describe("Creating cluster", func() {
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				cluster, err = dao.CreateCluster(db, terraformConfig)
+				cluster, err = dao.CreateCluster(db, terraformConfig, "")
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -113,7 +119,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("Without terraform configuration", func() {
 			BeforeEach(func() {
-				cluster, err = dao.CreateCluster(db, nil)
+				cluster, err = dao.CreateCluster(db, nil, requestId)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -125,7 +131,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("When then database transaction cannot be created", func() {
 			BeforeEach(func() {
-				cluster, err = dao.CreateCluster(InvalidDB, nil)
+				cluster, err = dao.CreateCluster(InvalidDB, nil, requestId)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -156,7 +162,7 @@ var _ = Describe("Cluster", func() {
 				if rows.Next() {
 					rows.Scan(&cluster_id)
 				}
-				cluster, err = dao.GetCluster(db, cluster_id)
+				cluster, err = dao.GetCluster(db, cluster_id, requestId)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -172,7 +178,7 @@ var _ = Describe("Cluster", func() {
 		Context("When the cluster does not exist", func() {
 			BeforeEach(func() {
 				// Without inserting any clusters into database
-				cluster, err = dao.GetCluster(db, cluster1.Id)
+				cluster, err = dao.GetCluster(db, cluster1.Id, requestId)
 			})
 			It("should error", func() {
 				Expect(err).Should(HaveOccurred())
@@ -184,7 +190,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("When an id was not specified", func() {
 			BeforeEach(func() {
-				cluster, err = dao.GetCluster(db, "")
+				cluster, err = dao.GetCluster(db, "", requestId)
 			})
 			It("should error", func() {
 				Expect(err).Should(HaveOccurred())
@@ -211,7 +217,7 @@ var _ = Describe("Cluster", func() {
 			BeforeEach(func() {
 				db.MustExec("INSERT INTO clusters (id, name, status) VALUES ($1, $2, $3)", cluster1.Id, cluster1.Name, cluster1.Status)
 				db.MustExec("INSERT INTO clusters (id, name, status) VALUES ($1, $2, $3)", cluster2.Id, cluster2.Name, cluster2.Status)
-				clusters, err = dao.GetClusters(db)
+				clusters, err = dao.GetClusters(db, requestId)
 			})
 			It("Should not error", func() {
 				Expect(err).ShouldNot(HaveOccurred())
@@ -228,7 +234,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("When no clusters exist", func() {
 			BeforeEach(func() {
-				clusters, err = dao.GetClusters(db)
+				clusters, err = dao.GetClusters(db, requestId)
 			})
 			It("Should not error", func() {
 				Expect(err).ShouldNot(HaveOccurred())
@@ -259,7 +265,7 @@ var _ = Describe("Cluster", func() {
 					Status: "different_status",
 					Name:   cluster1.Name,
 				}
-				cluster, err = dao.UpdateCluster(db, updated_cluster)
+				cluster, err = dao.UpdateCluster(db, updated_cluster, requestId)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -285,7 +291,7 @@ var _ = Describe("Cluster", func() {
 		Context("When nothing is different", func() {
 			BeforeEach(func() {
 				db.MustExec("INSERT INTO clusters (id, name, status) VALUES ($1, $2, $3)", cluster1.Id, cluster1.Name, cluster1.Status)
-				cluster, err = dao.UpdateCluster(db, cluster1)
+				cluster, err = dao.UpdateCluster(db, cluster1, requestId)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -314,7 +320,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("When the cluster does not exist", func() {
 			BeforeEach(func() {
-				cluster, err = dao.UpdateCluster(db, notacluster)
+				cluster, err = dao.UpdateCluster(db, notacluster, requestId)
 			})
 			It("should error", func() {
 				Expect(err).Should(HaveOccurred())
@@ -344,7 +350,7 @@ var _ = Describe("Cluster", func() {
 				if rows.Next() {
 					rows.Scan(&id)
 				}
-				cluster, err = dao.DeleteCluster(db, id)
+				cluster, err = dao.DeleteCluster(db, id, requestId)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -362,7 +368,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("When the cluster does not exist", func() {
 			BeforeEach(func() {
-				cluster, err = dao.DeleteCluster(db, cluster1.Id)
+				cluster, err = dao.DeleteCluster(db, cluster1.Id, requestId)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -381,7 +387,7 @@ var _ = Describe("Cluster", func() {
 				if rows.Next() {
 					rows.Scan(&id)
 				}
-				cluster, err = dao.DeleteCluster(db, id)
+				cluster, err = dao.DeleteCluster(db, id, requestId)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -400,7 +406,7 @@ var _ = Describe("Cluster", func() {
 				if rows.Next() {
 					rows.Scan(&id)
 				}
-				cluster, err = dao.DeleteCluster(db, id)
+				cluster, err = dao.DeleteCluster(db, id, requestId)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())

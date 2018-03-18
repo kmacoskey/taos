@@ -12,11 +12,11 @@ import (
 )
 
 type clusterDao interface {
-	GetCluster(db *sqlx.DB, id string) (*models.Cluster, error)
-	GetClusters(db *sqlx.DB) ([]models.Cluster, error)
-	CreateCluster(db *sqlx.DB, config []byte) (*models.Cluster, error)
-	UpdateCluster(db *sqlx.DB, cluster *models.Cluster) (*models.Cluster, error)
-	DeleteCluster(db *sqlx.DB, id string) (*models.Cluster, error)
+	GetCluster(db *sqlx.DB, id string, requestId string) (*models.Cluster, error)
+	GetClusters(db *sqlx.DB, requestId string) ([]models.Cluster, error)
+	CreateCluster(db *sqlx.DB, config []byte, requestId string) (*models.Cluster, error)
+	UpdateCluster(db *sqlx.DB, cluster *models.Cluster, requestId string) (*models.Cluster, error)
+	DeleteCluster(db *sqlx.DB, id string, requestId string) (*models.Cluster, error)
 }
 
 type ClusterService struct {
@@ -38,7 +38,7 @@ func (s *ClusterService) GetCluster(context app.RequestContext, id string) (*mod
 
 	logger.Info("retrieving cluster from database")
 
-	cluster, err := s.dao.GetCluster(s.db, id)
+	cluster, err := s.dao.GetCluster(s.db, id, context.RequestId())
 	return cluster, err
 }
 
@@ -52,7 +52,7 @@ func (s *ClusterService) GetClusters(context app.RequestContext) ([]models.Clust
 
 	logger.Info("retrieving clusters from database")
 
-	clusters, err := s.dao.GetClusters(s.db)
+	clusters, err := s.dao.GetClusters(s.db, context.RequestId())
 	return clusters, err
 }
 
@@ -66,13 +66,13 @@ func (s *ClusterService) CreateCluster(context app.RequestContext) (*models.Clus
 
 	logger.Info("creating new cluster")
 
-	cluster, err := s.dao.CreateCluster(s.db, context.TerraformConfig())
+	cluster, err := s.dao.CreateCluster(s.db, context.TerraformConfig(), context.RequestId())
 	if err != nil {
 		return cluster, err
 	}
 
 	// After creating new cluster entry in database, begin the provisioning
-	go s.TerraformProvisionCluster(cluster, context.TerraformConfig())
+	go s.TerraformProvisionCluster(cluster, context.TerraformConfig(), context.RequestId())
 
 	//  Requested cluster is returned and then eventual cluster status
 	//  is handled in the go thread
@@ -88,7 +88,7 @@ func (s *ClusterService) DeleteCluster(context app.RequestContext, id string) (*
 	})
 
 	// Retrieve the cluster to destroy
-	cluster, err := s.dao.GetCluster(s.db, id)
+	cluster, err := s.dao.GetCluster(s.db, id, context.RequestId())
 	if err != nil {
 		logger.Error(err.Error())
 		logger.Error("failed to destroy cluster")
@@ -111,7 +111,7 @@ func (s *ClusterService) DeleteCluster(context app.RequestContext, id string) (*
 	logger.Info("destroying cluster")
 
 	cluster.Status = models.ClusterStatusDestroying
-	cluster_being_destroyed, err := s.dao.DeleteCluster(s.db, id)
+	cluster_being_destroyed, err := s.dao.DeleteCluster(s.db, id, context.RequestId())
 	if err != nil {
 		logger.Error(err.Error())
 		logger.Error("failed to destroy cluster")
@@ -119,14 +119,14 @@ func (s *ClusterService) DeleteCluster(context app.RequestContext, id string) (*
 	}
 
 	// After setting cluster status in the database, begin the destruction
-	go s.TerraformDestroyCluster(cluster_being_destroyed)
+	go s.TerraformDestroyCluster(cluster_being_destroyed, context.RequestId())
 
 	//  Cluster is returned and then eventual cluster status
 	//  is handled in the go thread
 	return cluster_being_destroyed, nil
 }
 
-func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster) {
+func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster, requestId string) {
 
 	t := &terraform.Terraform{
 		Config: c.TerraformConfig,
@@ -140,7 +140,7 @@ func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster) {
 	if err != nil {
 		c.Status = "destruction_failed at init"
 		fmt.Println(err)
-		_, err := s.dao.UpdateCluster(s.db, c)
+		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -150,7 +150,7 @@ func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster) {
 	err = tc.Destroy()
 	if err != nil {
 		c.Status = "destruction_failed at destroy"
-		_, err := s.dao.UpdateCluster(s.db, c)
+		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -160,7 +160,7 @@ func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster) {
 	err = tc.ClientDestroy()
 	if err != nil {
 		c.Status = "destruction_failed at client destroy"
-		_, err := s.dao.UpdateCluster(s.db, c)
+		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -169,7 +169,7 @@ func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster) {
 
 	if err == nil {
 		c.Status = "destroyed"
-		_, err := s.dao.UpdateCluster(s.db, c)
+		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -178,7 +178,7 @@ func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster) {
 
 }
 
-func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []byte) {
+func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []byte, requestId string) {
 
 	t := &terraform.Terraform{
 		Config: config,
@@ -191,7 +191,7 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 	err := tc.ClientInit()
 	if err != nil {
 		c.Status = "provision_failed"
-		_, err := s.dao.UpdateCluster(s.db, c)
+		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -201,7 +201,7 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 	err = tc.Apply()
 	if err != nil {
 		c.Status = "provision_failed"
-		_, err := s.dao.UpdateCluster(s.db, c)
+		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -211,7 +211,7 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 	err = tc.ClientDestroy()
 	if err != nil {
 		c.Status = "provision_failed"
-		_, err := s.dao.UpdateCluster(s.db, c)
+		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -220,7 +220,7 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 
 	if err == nil {
 		c.Status = "provision_success"
-		_, err := s.dao.UpdateCluster(s.db, c)
+		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {
 			fmt.Println(err)
 		}

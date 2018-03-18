@@ -298,7 +298,7 @@ func NewValidClusterDao(cm map[string]*models.Cluster) *ValidClusterDao {
 	}
 }
 
-func (dao *ValidClusterDao) CreateCluster(db *sqlx.DB, config []byte) (*models.Cluster, error) {
+func (dao *ValidClusterDao) CreateCluster(db *sqlx.DB, config []byte, requestId string) (*models.Cluster, error) {
 	uuid := uuid.Must(uuid.NewV4()).String()
 	dao.clustersMap[uuid] = &models.Cluster{
 		Id:              uuid,
@@ -309,16 +309,16 @@ func (dao *ValidClusterDao) CreateCluster(db *sqlx.DB, config []byte) (*models.C
 	return dao.clustersMap[uuid], nil
 }
 
-func (dao *ValidClusterDao) UpdateCluster(db *sqlx.DB, cluster *models.Cluster) (*models.Cluster, error) {
+func (dao *ValidClusterDao) UpdateCluster(db *sqlx.DB, cluster *models.Cluster, requestId string) (*models.Cluster, error) {
 	dao.clustersMap[cluster.Id] = cluster
 	return dao.clustersMap[cluster.Id], nil
 }
 
-func (dao *ValidClusterDao) GetCluster(db *sqlx.DB, id string) (*models.Cluster, error) {
+func (dao *ValidClusterDao) GetCluster(db *sqlx.DB, id string, requestId string) (*models.Cluster, error) {
 	return dao.clustersMap[id], nil
 }
 
-func (dao *ValidClusterDao) GetClusters(db *sqlx.DB) ([]models.Cluster, error) {
+func (dao *ValidClusterDao) GetClusters(db *sqlx.DB, requestId string) ([]models.Cluster, error) {
 	clusters := []models.Cluster{}
 	for _, cluster := range dao.clustersMap {
 		clusters = append(clusters, *cluster)
@@ -326,7 +326,7 @@ func (dao *ValidClusterDao) GetClusters(db *sqlx.DB) ([]models.Cluster, error) {
 	return clusters, nil
 }
 
-func (dao *ValidClusterDao) DeleteCluster(db *sqlx.DB, id string) (*models.Cluster, error) {
+func (dao *ValidClusterDao) DeleteCluster(db *sqlx.DB, id string, requestId string) (*models.Cluster, error) {
 	if _, ok := dao.clustersMap[id]; !ok {
 		return nil, errors.New("foo")
 	} else {
@@ -343,23 +343,23 @@ func NewEmptyClusterDao() *EmptyClusterDao {
 	return &EmptyClusterDao{}
 }
 
-func (dao *EmptyClusterDao) CreateCluster(db *sqlx.DB, config []byte) (*models.Cluster, error) {
+func (dao *EmptyClusterDao) CreateCluster(db *sqlx.DB, config []byte, requestId string) (*models.Cluster, error) {
 	return nil, errors.New("foo")
 }
 
-func (dao *EmptyClusterDao) UpdateCluster(db *sqlx.DB, cluster *models.Cluster) (*models.Cluster, error) {
+func (dao *EmptyClusterDao) UpdateCluster(db *sqlx.DB, cluster *models.Cluster, requestId string) (*models.Cluster, error) {
 	return cluster, nil
 }
 
-func (dao *EmptyClusterDao) GetCluster(db *sqlx.DB, id string) (*models.Cluster, error) {
+func (dao *EmptyClusterDao) GetCluster(db *sqlx.DB, id string, requestId string) (*models.Cluster, error) {
 	return nil, errors.New("foo")
 }
 
-func (dao *EmptyClusterDao) GetClusters(db *sqlx.DB) ([]models.Cluster, error) {
+func (dao *EmptyClusterDao) GetClusters(db *sqlx.DB, requestId string) ([]models.Cluster, error) {
 	clusters := []models.Cluster{}
 	return clusters, nil
 }
 
-func (dao *EmptyClusterDao) DeleteCluster(db *sqlx.DB, id string) (*models.Cluster, error) {
+func (dao *EmptyClusterDao) DeleteCluster(db *sqlx.DB, id string, requestId string) (*models.Cluster, error) {
 	return nil, errors.New("foo")
 }
