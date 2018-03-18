@@ -4,6 +4,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 
 	"errors"
 
@@ -31,6 +32,8 @@ var _ = Describe("Cluster", func() {
 	)
 
 	BeforeEach(func() {
+		log.SetLevel(log.FatalLevel)
+
 		// Create a new RequestContext for each test
 		rc = app.RequestContext{}
 
@@ -76,9 +79,6 @@ var _ = Describe("Cluster", func() {
 			})
 			It("Should return a cluster", func() {
 				Expect(cluster).NotTo(BeNil())
-			})
-			It("Should return as provisioning", func() {
-				Expect(cluster.Status).To(Equal("provisioning"))
 			})
 			It("Should eventually be provisioned", func() {
 				Eventually(func() string {

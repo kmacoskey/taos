@@ -28,69 +28,102 @@ func NewClusterService(dao clusterDao, db *sqlx.DB) *ClusterService {
 	return &ClusterService{dao, db}
 }
 
-func (s *ClusterService) GetCluster(rc app.RequestContext, id string) (*models.Cluster, error) {
+func (s *ClusterService) GetCluster(context app.RequestContext, id string) (*models.Cluster, error) {
+	logger := log.WithFields(log.Fields{
+		"topic":   "taos",
+		"package": "services",
+		"event":   "get_cluster",
+		"request": context.RequestId(),
+	})
+
+	logger.Info("retrieving cluster from database")
+
 	cluster, err := s.dao.GetCluster(s.db, id)
 	return cluster, err
 }
 
-func (s *ClusterService) GetClusters(rc app.RequestContext) ([]models.Cluster, error) {
+func (s *ClusterService) GetClusters(context app.RequestContext) ([]models.Cluster, error) {
+	logger := log.WithFields(log.Fields{
+		"topic":   "taos",
+		"package": "services",
+		"event":   "get_clusters",
+		"request": context.RequestId(),
+	})
+
+	logger.Info("retrieving clusters from database")
+
 	clusters, err := s.dao.GetClusters(s.db)
 	return clusters, err
 }
 
-func (s *ClusterService) DeleteCluster(rc app.RequestContext, id string) (*models.Cluster, error) {
+func (s *ClusterService) CreateCluster(context app.RequestContext) (*models.Cluster, error) {
 	logger := log.WithFields(log.Fields{
 		"topic":   "taos",
 		"package": "services",
-		"event":   "delete_cluster",
-		"context": id,
+		"event":   "create_cluster",
+		"request": context.RequestId(),
 	})
 
-	logger.Debug("service request to destroy cluster")
+	logger.Info("creating new cluster")
 
-	cluster, err := s.dao.GetCluster(s.db, id)
-	if err != nil {
-		logger.Debug("cluster destroying failed")
-		return nil, errors.New(fmt.Sprintf("cluster destroying failed: %s", err.Error()))
-	}
-
-	if cluster == nil {
-		logger.Debug("no cluster set to destroy")
-		return nil, errors.New("cannot destroy cluster that does not exist")
-	}
-
-	switch cluster.Status {
-	case "destroying", "destroyed":
-		logger.Debug("no cluster set to destroy")
-		return nil, errors.New("cannot destroy cluster that is already 'destroying' or 'destroyed'")
-	}
-
-	cluster.Status = "destroying"
-
-	updated_cluster, err := s.dao.UpdateCluster(s.db, cluster)
-	if err != nil {
-		logger.Debug(fmt.Sprintf("failed to update cluster status: %v", err))
-		return updated_cluster, err
-	}
-
-	logger.Debug("cluster set to destroy")
-	go s.TerraformDestroyCluster(cluster)
-
-	return s.dao.DeleteCluster(s.db, id)
-}
-
-func (s *ClusterService) CreateCluster(rc app.RequestContext) (*models.Cluster, error) {
-	cluster, err := s.dao.CreateCluster(s.db, rc.TerraformConfig())
+	cluster, err := s.dao.CreateCluster(s.db, context.TerraformConfig())
 	if err != nil {
 		return cluster, err
 	}
 
-	// TODO: The returned cluster from create should have the terraform config in the model?
-	go s.TerraformProvisionCluster(cluster, rc.TerraformConfig())
+	// After creating new cluster entry in database, begin the provisioning
+	go s.TerraformProvisionCluster(cluster, context.TerraformConfig())
 
-	cluster.Status = "provisioning"
-
+	//  Requested cluster is returned and then eventual cluster status
+	//  is handled in the go thread
 	return cluster, err
+}
+
+func (s *ClusterService) DeleteCluster(context app.RequestContext, id string) (*models.Cluster, error) {
+	logger := log.WithFields(log.Fields{
+		"topic":   "taos",
+		"package": "services",
+		"event":   "delete_cluster",
+		"request": context.RequestId(),
+	})
+
+	// Retrieve the cluster to destroy
+	cluster, err := s.dao.GetCluster(s.db, id)
+	if err != nil {
+		logger.Error(err.Error())
+		logger.Error("failed to destroy cluster")
+		return nil, err
+	}
+
+	if cluster == nil {
+		logger.Error("cannot destroy cluster that does not exist")
+		logger.Error("failed to destroy cluster")
+		return nil, errors.New("cannot destroy cluster that does not exist")
+	}
+
+	switch cluster.Status {
+	case models.ClusterStatusDestroying, models.ClusterStatusDestroyed:
+		logger.Error(fmt.Sprintf("cannot destroy cluster that is already '%s' or '%s'", models.ClusterStatusDestroying, models.ClusterStatusDestroyed))
+		logger.Error("failed to destroy cluster")
+		return nil, errors.New(fmt.Sprintf("cannot destroy cluster that is already '%s' or '%s'", models.ClusterStatusDestroying, models.ClusterStatusDestroyed))
+	}
+
+	logger.Info("destroying cluster")
+
+	cluster.Status = models.ClusterStatusDestroying
+	cluster_being_destroyed, err := s.dao.DeleteCluster(s.db, id)
+	if err != nil {
+		logger.Error(err.Error())
+		logger.Error("failed to destroy cluster")
+		return cluster_being_destroyed, err
+	}
+
+	// After setting cluster status in the database, begin the destruction
+	go s.TerraformDestroyCluster(cluster_being_destroyed)
+
+	//  Cluster is returned and then eventual cluster status
+	//  is handled in the go thread
+	return cluster_being_destroyed, nil
 }
 
 func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster) {

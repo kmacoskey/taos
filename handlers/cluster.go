@@ -132,6 +132,8 @@ func (ch *ClusterHandler) CreateCluster() app.Adapter {
 				return
 			}
 
+			logger.Debug(body)
+
 			context.SetTerraformConfig(body)
 
 			cluster, err := ch.cs.CreateCluster(context)
@@ -153,6 +155,7 @@ func (ch *ClusterHandler) CreateCluster() app.Adapter {
 			// Eventually this may capture the situation where resources are not available
 
 			logger.Info("cluster created")
+			logger.Debug(cluster)
 			respondWithJson(w, newClusterResponse(cluster, context.RequestId()), http.StatusAccepted)
 		})
 	}
@@ -221,6 +224,7 @@ func (ch *ClusterHandler) GetCluster() app.Adapter {
 			}
 
 			logger.Info("returning cluster")
+			logger.Debug(cluster)
 			respondWithJson(w, newClusterResponse(cluster, context.RequestId()), http.StatusOK)
 		})
 	}
@@ -272,6 +276,7 @@ func (ch *ClusterHandler) GetClusters() app.Adapter {
 			}
 
 			logger.Info("returning clusters")
+			logger.Debug(clusters)
 			respondWithJson(w, newClustersResponse(clusters, context.RequestId()), http.StatusOK)
 		})
 	}
@@ -339,6 +344,7 @@ func (ch *ClusterHandler) DeleteCluster() app.Adapter {
 			}
 
 			logger.Info("deleting cluster")
+			logger.Debug(cluster)
 			respondWithJson(w, newClusterResponse(cluster, context.RequestId()), http.StatusAccepted)
 		})
 	}

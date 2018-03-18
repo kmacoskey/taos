@@ -8,5 +8,7 @@ type Cluster struct {
 }
 
 const (
-	ClusterStatusRequested = "requested"
+	ClusterStatusRequested  = "requested"
+	ClusterStatusDestroying = "destroying"
+	ClusterStatusDestroyed  = "destroyed"
 )
