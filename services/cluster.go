@@ -127,6 +127,12 @@ func (s *ClusterService) DeleteCluster(context app.RequestContext, id string) (*
 }
 
 func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster, requestId string) {
+	logger := log.WithFields(log.Fields{
+		"topic":   "taos",
+		"package": "services",
+		"event":   "delete_cluster",
+		"request": requestId,
+	})
 
 	t := &terraform.Terraform{
 		Config: c.TerraformConfig,
@@ -138,40 +144,52 @@ func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster, requestId st
 
 	err := tc.ClientInit()
 	if err != nil {
-		c.Status = "destruction_failed at init"
-		fmt.Println(err)
+		c.Status = "destruction_failed"
+		logger.Error(err.Error())
+		logger.Error("cluster destroying failed at client init")
 		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {
-			fmt.Println(err)
+			logger.Error(err.Error())
+			logger.Error("cluster destroying failed at client init")
 		}
 		return
 	}
 
-	err = tc.Destroy()
+	output, err := tc.Destroy()
 	if err != nil {
-		c.Status = "destruction_failed at destroy"
+		c.Status = "destruction_failed"
+		c.Message = err.Error()
+		logger.Error(err.Error())
+		logger.Error("cluster destroying failed at terraform destroy")
 		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {
-			fmt.Println(err)
+			logger.Error(err.Error())
+			logger.Error("cluster destroying failed at terraform destroy")
 		}
 		return
 	}
 
 	err = tc.ClientDestroy()
 	if err != nil {
-		c.Status = "destruction_failed at client destroy"
+		c.Status = "destruction_failed"
+		c.Message = err.Error()
+		logger.Error(err.Error())
+		logger.Error("cluster destroying failed at client destroy")
 		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {
-			fmt.Println(err)
+			logger.Error(err.Error())
+			logger.Error("cluster destroying failed at client destroy")
 		}
 		return
 	}
 
 	if err == nil {
 		c.Status = "destroyed"
+		c.Message = output
 		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {
-			fmt.Println(err)
+			logger.Error(err.Error())
+			logger.Error("cluster destroying failed")
 		}
 		return
 	}
@@ -179,6 +197,12 @@ func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster, requestId st
 }
 
 func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []byte, requestId string) {
+	logger := log.WithFields(log.Fields{
+		"topic":   "taos",
+		"package": "services",
+		"event":   "create_cluster",
+		"request": requestId,
+	})
 
 	t := &terraform.Terraform{
 		Config: config,
@@ -188,22 +212,38 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 		Terraform: t,
 	}
 
-	err := tc.ClientInit()
+	logger.Info("provisioning cluster")
+
+	c.Status = "provisioning"
+	_, err := s.dao.UpdateCluster(s.db, c, requestId)
+	if err != nil {
+		logger.Error(err.Error())
+		logger.Error("cluster provisioning failed")
+	}
+
+	err = tc.ClientInit()
 	if err != nil {
 		c.Status = "provision_failed"
+		logger.Error(err.Error())
+		logger.Error("cluster provisioning failed during clientinit")
 		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {
-			fmt.Println(err)
+			logger.Error(err.Error())
+			logger.Error("cluster provisioning failed")
 		}
 		return
 	}
 
-	err = tc.Apply()
+	output, err := tc.Apply()
 	if err != nil {
 		c.Status = "provision_failed"
+		c.Message = err.Error()
+		logger.Error(err.Error())
+		logger.Error("cluster provisioning failed during terraform apply")
 		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {
-			fmt.Println(err)
+			logger.Error(err.Error())
+			logger.Error("cluster provisioning failed")
 		}
 		return
 	}
@@ -211,18 +251,24 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 	err = tc.ClientDestroy()
 	if err != nil {
 		c.Status = "provision_failed"
+		c.Message = err.Error()
+		logger.Error(err.Error())
+		logger.Error("cluster provisioning failed during client cleanup")
 		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {
-			fmt.Println(err)
+			logger.Error(err.Error())
+			logger.Error("cluster provisioning failed")
 		}
 		return
 	}
 
 	if err == nil {
 		c.Status = "provision_success"
+		c.Message = output
 		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {
-			fmt.Println(err)
+			logger.Error(err.Error())
+			logger.Error("cluster provisioning failed")
 		}
 		return
 	}

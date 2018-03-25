@@ -13,6 +13,7 @@ import (
 	"github.com/kmacoskey/taos/app"
 	"github.com/kmacoskey/taos/models"
 	. "github.com/kmacoskey/taos/services"
+	"github.com/kmacoskey/taos/terraform"
 )
 
 var _ = Describe("Cluster", func() {
@@ -222,6 +223,7 @@ var _ = Describe("Cluster", func() {
 	// ======================================================================
 
 	Describe("Deleting a cluster", func() {
+
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
 				clustersMap := make(map[string]*models.Cluster)

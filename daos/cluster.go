@@ -136,6 +136,8 @@ func (dao *ClusterDao) UpdateCluster(db *sqlx.DB, cluster *models.Cluster, reque
 	logger.Debug("transaction commited")
 	logger.Debug(updated_cluster)
 
+	logger.Info(fmt.Sprintf("cluster '%s' status '%s'", updated_cluster.Id, updated_cluster.Status))
+
 	return &updated_cluster, nil
 }
 
