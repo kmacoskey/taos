@@ -40,9 +40,10 @@ type ResponseData struct {
 type ResponseAttributes interface{}
 
 type ClusterResponse struct {
-	Id     string `json:"id"`
-	Name   string `json:"name"`
-	Status string `json:"status"`
+	Id      string `json:"id"`
+	Name    string `json:"name"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
 }
 
 type ErrorResponse struct {
@@ -352,9 +353,10 @@ func (ch *ClusterHandler) DeleteCluster() app.Adapter {
 
 func newClusterResponse(cluster *models.Cluster, request_id string) *RequestResponse {
 	cluster_response := ClusterResponse{
-		Id:     cluster.Id,
-		Name:   cluster.Name,
-		Status: cluster.Status,
+		Id:      cluster.Id,
+		Name:    cluster.Name,
+		Status:  cluster.Status,
+		Message: cluster.Message,
 	}
 
 	response_data := ResponseData{
@@ -376,9 +378,10 @@ func newClustersResponse(clusters []models.Cluster, request_id string) *RequestR
 
 	for _, cluster := range clusters {
 		cluster_response := ClusterResponse{
-			Id:     cluster.Id,
-			Name:   cluster.Name,
-			Status: cluster.Status,
+			Id:      cluster.Id,
+			Name:    cluster.Name,
+			Status:  cluster.Status,
+			Message: cluster.Message,
 		}
 
 		cluster_list = append(cluster_list, cluster_response)

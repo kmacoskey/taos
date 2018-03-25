@@ -105,8 +105,8 @@ func (dao *ClusterDao) UpdateCluster(db *sqlx.DB, cluster *models.Cluster, reque
 	}
 	logger.Debug("transaction created")
 
-	logger.Debug(fmt.Sprintf("UPDATE clusters SET status = '%s' WHERE id = '%s' RETURNING *", cluster.Status, cluster.Id))
-	rows, err := tx.Queryx(`UPDATE clusters SET status = $1 WHERE id = $2 RETURNING *`, &cluster.Status, &cluster.Id)
+	logger.Debug(fmt.Sprintf("UPDATE clusters SET status = '%s', message = '%s' WHERE id = '%s' RETURNING *", cluster.Status, cluster.Message, cluster.Id))
+	rows, err := tx.Queryx(`UPDATE clusters SET status = $1, message = $2 WHERE id = $3 RETURNING *`, &cluster.Status, &cluster.Message, &cluster.Id)
 	if err != nil {
 		tx.Rollback()
 		logger.Debug("transaction rolledback")

@@ -218,7 +218,7 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 	_, err := s.dao.UpdateCluster(s.db, c, requestId)
 	if err != nil {
 		logger.Error(err.Error())
-		logger.Error("cluster provisioning failed")
+		logger.Error("failed to update cluster during provisionining")
 	}
 
 	err = tc.ClientInit()
@@ -229,7 +229,7 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {
 			logger.Error(err.Error())
-			logger.Error("cluster provisioning failed")
+			logger.Error("failed to update cluster during provision failure")
 		}
 		return
 	}
@@ -243,7 +243,7 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {
 			logger.Error(err.Error())
-			logger.Error("cluster provisioning failed")
+			logger.Error("failed to update cluster during provision failure")
 		}
 		return
 	}
@@ -257,7 +257,7 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {
 			logger.Error(err.Error())
-			logger.Error("cluster provisioning failed")
+			logger.Error("failed to update cluster during provision failure")
 		}
 		return
 	}
@@ -268,7 +268,7 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {
 			logger.Error(err.Error())
-			logger.Error("cluster provisioning failed")
+			logger.Error("failed to update cluster during provisionining")
 		}
 		return
 	}

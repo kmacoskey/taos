@@ -23,6 +23,7 @@ var (
 				id 								UUID PRIMARY KEY DEFAULT public.gen_random_uuid(),
 				name 							text,
 				status 						text,
+				message 					text,
 				terraform_config 	json
 		)`
 	truncate_clusters = `TRUNCATE TABLE clusters`
@@ -75,9 +76,9 @@ var _ = Describe("Cluster", func() {
 		tx, err = db.Beginx()
 		Expect(err).NotTo(HaveOccurred())
 
-		cluster1 = &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster_1", Status: "provisioned"}
-		cluster2 = &models.Cluster{Id: "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster_2", Status: "provisioned"}
-		notacluster = &models.Cluster{Id: "a19e1bfe-0ec5-11ea-ba89-0ed0f89f718b", Name: "notacluster", Status: "nothere"}
+		cluster1 = &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster_1", Status: "provisioned", Message: ""}
+		cluster2 = &models.Cluster{Id: "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster_2", Status: "provisioned", Message: ""}
+		notacluster = &models.Cluster{Id: "a19e1bfe-0ec5-11ea-ba89-0ed0f89f718b", Name: "notacluster", Status: "nothere", Message: ""}
 		terraformConfig = []byte(`{"provider":{"google":{}}}`)
 	})
 
@@ -156,7 +157,7 @@ var _ = Describe("Cluster", func() {
 	Describe("Getting a Cluster", func() {
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				rows, err := db.NamedQuery(`INSERT INTO clusters (id,name,status) VALUES (:id,:name,:status) RETURNING id`, cluster1)
+				rows, err := db.NamedQuery(`INSERT INTO clusters (id,name,status,message) VALUES (:id,:name,:status,:message) RETURNING id`, cluster1)
 				Expect(err).NotTo(HaveOccurred())
 				var cluster_id string
 				if rows.Next() {
@@ -215,8 +216,8 @@ var _ = Describe("Cluster", func() {
 	Describe("Retrieving clusters", func() {
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				db.MustExec("INSERT INTO clusters (id, name, status) VALUES ($1, $2, $3)", cluster1.Id, cluster1.Name, cluster1.Status)
-				db.MustExec("INSERT INTO clusters (id, name, status) VALUES ($1, $2, $3)", cluster2.Id, cluster2.Name, cluster2.Status)
+				db.MustExec("INSERT INTO clusters (id, name, status, message) VALUES ($1, $2, $3, $4)", cluster1.Id, cluster1.Name, cluster1.Status, cluster1.Message)
+				db.MustExec("INSERT INTO clusters (id, name, status, message) VALUES ($1, $2, $3, $4)", cluster2.Id, cluster2.Name, cluster2.Status, cluster2.Message)
 				clusters, err = dao.GetClusters(db, requestId)
 			})
 			It("Should not error", func() {
@@ -259,7 +260,7 @@ var _ = Describe("Cluster", func() {
 	Describe("Updating a cluster", func() {
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				db.MustExec("INSERT INTO clusters (id, name, status) VALUES ($1, $2, $3)", cluster1.Id, cluster1.Name, cluster1.Status)
+				db.MustExec("INSERT INTO clusters (id, name, status, message) VALUES ($1, $2, $3, $4)", cluster1.Id, cluster1.Name, cluster1.Status, cluster1.Message)
 				updated_cluster := &models.Cluster{
 					Id:     cluster1.Id,
 					Status: "different_status",
@@ -290,7 +291,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("When nothing is different", func() {
 			BeforeEach(func() {
-				db.MustExec("INSERT INTO clusters (id, name, status) VALUES ($1, $2, $3)", cluster1.Id, cluster1.Name, cluster1.Status)
+				db.MustExec("INSERT INTO clusters (id, name, status, message) VALUES ($1, $2, $3, $4)", cluster1.Id, cluster1.Name, cluster1.Status, cluster1.Message)
 				cluster, err = dao.UpdateCluster(db, cluster1, requestId)
 			})
 			It("Should not error", func() {
@@ -344,8 +345,8 @@ var _ = Describe("Cluster", func() {
 	Describe("Deleting clusters", func() {
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				rows, err := db.NamedQuery(`INSERT INTO clusters (id,name,status) VALUES (:id,:name,:status) RETURNING id`, cluster1)
-				Expect(err).NotTo(HaveOccurred())
+				rows, insert_err := db.NamedQuery(`INSERT INTO clusters (id,name,status,message) VALUES (:id,:name,:status,:message) RETURNING id`, cluster1)
+				Expect(insert_err).NotTo(HaveOccurred())
 				var id string
 				if rows.Next() {
 					rows.Scan(&id)
@@ -381,7 +382,7 @@ var _ = Describe("Cluster", func() {
 		Context("When the cluster has already been destroyed", func() {
 			BeforeEach(func() {
 				cluster1.Status = "destroyed"
-				rows, insert_err := db.NamedQuery(`INSERT INTO clusters (id,name,status) VALUES (:id,:name,:status) RETURNING id`, cluster1)
+				rows, insert_err := db.NamedQuery(`INSERT INTO clusters (id,name,status,message) VALUES (:id,:name,:status,:message) RETURNING id`, cluster1)
 				Expect(insert_err).NotTo(HaveOccurred())
 				var id string
 				if rows.Next() {
@@ -400,7 +401,7 @@ var _ = Describe("Cluster", func() {
 		Context("When the cluster is already being destroyed (destroying)", func() {
 			BeforeEach(func() {
 				cluster1.Status = "destroying"
-				rows, insert_err := db.NamedQuery(`INSERT INTO clusters (id,name,status) VALUES (:id,:name,:status) RETURNING id`, cluster1)
+				rows, insert_err := db.NamedQuery(`INSERT INTO clusters (id,name,status,message) VALUES (:id,:name,:status,:message) RETURNING id`, cluster1)
 				Expect(insert_err).NotTo(HaveOccurred())
 				var id string
 				if rows.Next() {
