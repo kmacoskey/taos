@@ -35,7 +35,12 @@ func (c Client) Version() (string, error) {
 }
 
 func (c Client) terraformCmd(args []string) *exec.Cmd {
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf("terraform %s", strings.Join(args, " ")))
+
+	defaultArgs := []string{
+		"-no-color",
+	}
+
+	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf("terraform %s %s", strings.Join(args, " "), strings.Join(defaultArgs, " ")))
 
 	cmd.Env = []string{
 		fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
