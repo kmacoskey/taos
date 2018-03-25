@@ -45,6 +45,7 @@ func (c Client) terraformCmd(args []string) *exec.Cmd {
 	cmd.Env = []string{
 		fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
 		fmt.Sprintf("HOME=%s", os.Getenv("HOME")),
+		fmt.Sprintf("GOOGLE_APPLICATION_CREDENTIALS=%s", os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")),
 		"CHECKPOINT_DISABLE=1",
 		// "TF_LOG=DEBUG",
 	}
