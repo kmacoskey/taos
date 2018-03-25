@@ -88,6 +88,13 @@ var _ = Describe("Cluster", func() {
 					return c.Status
 				}, 5, 0.5).Should(Equal("provision_success"))
 			})
+			It("Should eventually set the message to the terraform client output", func() {
+				Eventually(func() string {
+					c, err := cs.GetCluster(rc, cluster.Id)
+					Expect(err).NotTo(HaveOccurred())
+					return c.Message
+				}, 5, 0.5).Should(ContainSubstring("Apply complete! Resources: 0 added, 0 changed, 0 destroyed."))
+			})
 		})
 
 		Context("When a cluster is not returned from the dao", func() {
@@ -119,6 +126,13 @@ var _ = Describe("Cluster", func() {
 					Expect(err).NotTo(HaveOccurred())
 					return c.Status
 				}, 2, 0.5).Should(Equal("provision_failed"))
+			})
+			It("Should eventually set the message to the terraform client output", func() {
+				Eventually(func() string {
+					c, err := cs.GetCluster(rc, cluster.Id)
+					Expect(err).NotTo(HaveOccurred())
+					return c.Message
+				}, 5, 0.5).Should(ContainSubstring(terraform.ErrorInvalidConfig))
 			})
 		})
 
@@ -246,6 +260,13 @@ var _ = Describe("Cluster", func() {
 					Expect(err).NotTo(HaveOccurred())
 					return c.Status
 				}, 3, 0.5).Should(Equal("destroyed"))
+			})
+			It("Should eventually set the message to the terraform client output", func() {
+				Eventually(func() string {
+					c, err := cs.GetCluster(rc, cluster.Id)
+					Expect(err).NotTo(HaveOccurred())
+					return c.Message
+				}, 5, 0.5).Should(ContainSubstring("Destroy complete! Resources: 0 destroyed."))
 			})
 		})
 
