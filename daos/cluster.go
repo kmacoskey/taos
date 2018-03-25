@@ -81,7 +81,7 @@ func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, requestId strin
 
 	tx.Commit()
 	logger.Debug("transaction commited")
-	logger.Debug(cluster)
+	// logger.Debug(cluster)
 
 	return &cluster, nil
 }
@@ -134,7 +134,7 @@ func (dao *ClusterDao) UpdateCluster(db *sqlx.DB, cluster *models.Cluster, reque
 
 	tx.Commit()
 	logger.Debug("transaction commited")
-	logger.Debug(updated_cluster)
+	// logger.Debug(updated_cluster)
 
 	logger.Info(fmt.Sprintf("cluster '%s' status '%s'", updated_cluster.Id, updated_cluster.Status))
 
@@ -278,7 +278,7 @@ func (dao *ClusterDao) DeleteCluster(db *sqlx.DB, id string, requestId string) (
 
 	tx.Commit()
 	logger.Debug("transaction commited")
-	logger.Debug(updated_cluster)
+	// logger.Debug(updated_cluster)
 
 	return &updated_cluster, nil
 }

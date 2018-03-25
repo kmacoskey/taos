@@ -24,6 +24,7 @@ var _ = Describe("Client", func() {
 		validTerraformState    []byte
 		invalidTerraformState  []byte
 		emptyTerraformState    []byte
+		state                  []byte
 		output                 string
 		err                    error
 	)
@@ -433,27 +434,11 @@ var _ = Describe("Client", func() {
 
 	Describe("Running Terraform Apply", func() {
 
-		Context("When everything goes ok", func() {
-			BeforeEach(func() {
-				client.Terraform.Config = emptyTerraformConfig
-				output, err = client.Apply()
-			})
-			It("Should error", func() {
-				Expect(err).To(HaveOccurred())
-			})
-			It("Should not return any command output", func() {
-				Expect(output).To(BeEmpty())
-			})
-			It("Should return the expected error message", func() {
-				Expect(err.Error()).To(ContainSubstring(ErrorMissingConfig))
-			})
-		})
-
-		Context("With valid Terraform config and valid Terraform state", func() {
+		Context("When everything does ok", func() {
 			BeforeEach(func() {
 				client.Terraform.Config = validTerraformConfig
 				client.Terraform.State = validTerraformState
-				output, err = client.Apply()
+				state, output, err = client.Apply()
 			})
 			It("Should not error", func() {
 				Expect(err).ToNot(HaveOccurred())
@@ -461,8 +446,30 @@ var _ = Describe("Client", func() {
 			It("Should return the command output", func() {
 				Expect(output).NotTo(BeNil())
 			})
+			It("Should return the Terraform state", func() {
+				Expect(state).NotTo(BeNil())
+			})
 			It("Should apply successfully", func() {
 				Expect(output).To(ContainSubstring("Apply complete! Resources: 0 added, 0 changed, 0 destroyed."))
+			})
+		})
+
+		Context("With no Terraform config", func() {
+			BeforeEach(func() {
+				client.Terraform.Config = emptyTerraformConfig
+				state, output, err = client.Apply()
+			})
+			It("Should error", func() {
+				Expect(err).To(HaveOccurred())
+			})
+			It("Should not return any command output", func() {
+				Expect(output).To(BeEmpty())
+			})
+			It("Should not return any Terraform state", func() {
+				Expect(state).To(BeEmpty())
+			})
+			It("Should return the expected error message", func() {
+				Expect(err.Error()).To(ContainSubstring(ErrorMissingConfig))
 			})
 		})
 
@@ -470,13 +477,16 @@ var _ = Describe("Client", func() {
 			BeforeEach(func() {
 				client.Terraform.Config = validTerraformConfig
 				client.Terraform.State = invalidTerraformState
-				output, err = client.Apply()
+				state, output, err = client.Apply()
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
 			})
 			It("Should not return any command output", func() {
 				Expect(output).To(BeEmpty())
+			})
+			It("Should not return any Terraform state", func() {
+				Expect(state).To(BeEmpty())
 			})
 			It("Should return the expected error message", func() {
 				Expect(err.Error()).To(ContainSubstring("Error refreshing state:"))
@@ -487,13 +497,16 @@ var _ = Describe("Client", func() {
 			BeforeEach(func() {
 				client.Terraform.Config = validTerraformConfig
 				client.Terraform.State = emptyTerraformState
-				output, err = client.Apply()
+				state, output, err = client.Apply()
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 			It("Should return the command output", func() {
 				Expect(output).NotTo(BeNil())
+			})
+			It("Should return the Terraform state", func() {
+				Expect(state).NotTo(BeNil())
 			})
 			It("Should apply successfully", func() {
 				Expect(output).To(ContainSubstring("Apply complete! Resources: 0 added, 0 changed, 0 destroyed."))
@@ -504,13 +517,16 @@ var _ = Describe("Client", func() {
 			BeforeEach(func() {
 				client.Terraform.Config = invalidTerraformConfig
 				client.Terraform.State = validTerraformState
-				output, err = client.Apply()
+				state, output, err = client.Apply()
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
 			})
 			It("Should not return any command output", func() {
 				Expect(output).To(BeEmpty())
+			})
+			It("Should not return any Terraform state", func() {
+				Expect(state).To(BeEmpty())
 			})
 			It("Should return the expected error message", func() {
 				Expect(err.Error()).To(ContainSubstring(ErrorInvalidConfig))
@@ -521,13 +537,16 @@ var _ = Describe("Client", func() {
 			BeforeEach(func() {
 				client.Terraform.Config = invalidTerraformConfig
 				client.Terraform.State = invalidTerraformState
-				output, err = client.Apply()
+				state, output, err = client.Apply()
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
 			})
 			It("Should not return any command output", func() {
 				Expect(output).To(BeEmpty())
+			})
+			It("Should not return any Terraform state", func() {
+				Expect(state).To(BeEmpty())
 			})
 			It("Should return the expected error message", func() {
 				Expect(err.Error()).To(ContainSubstring(ErrorInvalidConfig))
@@ -538,13 +557,16 @@ var _ = Describe("Client", func() {
 			BeforeEach(func() {
 				client.Terraform.Config = invalidTerraformConfig
 				client.Terraform.State = emptyTerraformState
-				output, err = client.Apply()
+				state, output, err = client.Apply()
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
 			})
 			It("Should not return any command output", func() {
 				Expect(output).To(BeEmpty())
+			})
+			It("Should not return any Terraform state", func() {
+				Expect(state).To(BeEmpty())
 			})
 			It("Should return the expected error message", func() {
 				Expect(err.Error()).To(ContainSubstring(ErrorInvalidConfig))
@@ -565,27 +587,11 @@ var _ = Describe("Client", func() {
 
 	Describe("Running Terraform Destroy", func() {
 
-		Context("When everything goes ok", func() {
-			BeforeEach(func() {
-				client.Terraform.Config = emptyTerraformConfig
-				output, err = client.Destroy()
-			})
-			It("Should error", func() {
-				Expect(err).To(HaveOccurred())
-			})
-			It("Should not return any command output", func() {
-				Expect(output).To(BeEmpty())
-			})
-			It("Should return the expected error message", func() {
-				Expect(err.Error()).To(ContainSubstring(ErrorMissingConfig))
-			})
-		})
-
-		Context("With valid Terraform config and valid Terraform state", func() {
+		Context("When everything does ok", func() {
 			BeforeEach(func() {
 				client.Terraform.Config = validTerraformConfig
 				client.Terraform.State = validTerraformState
-				output, err = client.Destroy()
+				state, output, err = client.Destroy()
 			})
 			It("Should not error", func() {
 				Expect(err).ToNot(HaveOccurred())
@@ -593,8 +599,30 @@ var _ = Describe("Client", func() {
 			It("Should return the command output", func() {
 				Expect(output).NotTo(BeNil())
 			})
+			It("Should return the Terraform state", func() {
+				Expect(state).NotTo(BeNil())
+			})
 			It("Should apply successfully", func() {
 				Expect(output).To(ContainSubstring("Destroy complete! Resources: 0 destroyed."))
+			})
+		})
+
+		Context("With no Terraform config", func() {
+			BeforeEach(func() {
+				client.Terraform.Config = emptyTerraformConfig
+				state, output, err = client.Destroy()
+			})
+			It("Should error", func() {
+				Expect(err).To(HaveOccurred())
+			})
+			It("Should not return any command output", func() {
+				Expect(output).To(BeEmpty())
+			})
+			It("Should not return any Terraform state", func() {
+				Expect(state).To(BeEmpty())
+			})
+			It("Should return the expected error message", func() {
+				Expect(err.Error()).To(ContainSubstring(ErrorMissingConfig))
 			})
 		})
 
@@ -602,13 +630,16 @@ var _ = Describe("Client", func() {
 			BeforeEach(func() {
 				client.Terraform.Config = validTerraformConfig
 				client.Terraform.State = invalidTerraformState
-				output, err = client.Destroy()
+				state, output, err = client.Destroy()
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
 			})
 			It("Should not return any command output", func() {
 				Expect(output).To(BeEmpty())
+			})
+			It("Should not return any Terraform state", func() {
+				Expect(state).To(BeEmpty())
 			})
 			It("Should return the expected error message", func() {
 				Expect(err.Error()).To(ContainSubstring("Error refreshing state:"))
@@ -619,7 +650,7 @@ var _ = Describe("Client", func() {
 			BeforeEach(func() {
 				client.Terraform.Config = validTerraformConfig
 				client.Terraform.State = emptyTerraformState
-				output, err = client.Destroy()
+				state, output, err = client.Destroy()
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -627,7 +658,10 @@ var _ = Describe("Client", func() {
 			It("Should return the command output", func() {
 				Expect(output).NotTo(BeNil())
 			})
-			It("Should apply successfully", func() {
+			It("Should return the Terraform state", func() {
+				Expect(state).NotTo(BeNil())
+			})
+			It("Should destroy successfully", func() {
 				Expect(output).To(ContainSubstring("Destroy complete! Resources: 0 destroyed."))
 			})
 		})
@@ -636,13 +670,16 @@ var _ = Describe("Client", func() {
 			BeforeEach(func() {
 				client.Terraform.Config = invalidTerraformConfig
 				client.Terraform.State = validTerraformState
-				output, err = client.Destroy()
+				state, output, err = client.Destroy()
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
 			})
 			It("Should not return any command output", func() {
 				Expect(output).To(BeEmpty())
+			})
+			It("Should not return any Terraform state", func() {
+				Expect(state).To(BeEmpty())
 			})
 			It("Should return the expected error message", func() {
 				Expect(err.Error()).To(ContainSubstring(ErrorInvalidConfig))
@@ -653,13 +690,16 @@ var _ = Describe("Client", func() {
 			BeforeEach(func() {
 				client.Terraform.Config = invalidTerraformConfig
 				client.Terraform.State = invalidTerraformState
-				output, err = client.Destroy()
+				state, output, err = client.Destroy()
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
 			})
 			It("Should not return any command output", func() {
 				Expect(output).To(BeEmpty())
+			})
+			It("Should not return any Terraform state", func() {
+				Expect(state).To(BeEmpty())
 			})
 			It("Should return the expected error message", func() {
 				Expect(err.Error()).To(ContainSubstring(ErrorInvalidConfig))
@@ -670,13 +710,16 @@ var _ = Describe("Client", func() {
 			BeforeEach(func() {
 				client.Terraform.Config = invalidTerraformConfig
 				client.Terraform.State = emptyTerraformState
-				output, err = client.Destroy()
+				state, output, err = client.Destroy()
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
 			})
 			It("Should not return any command output", func() {
 				Expect(output).To(BeEmpty())
+			})
+			It("Should not return any Terraform state", func() {
+				Expect(state).To(BeEmpty())
 			})
 			It("Should return the expected error message", func() {
 				Expect(err.Error()).To(ContainSubstring(ErrorInvalidConfig))

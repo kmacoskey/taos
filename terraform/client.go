@@ -10,6 +10,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/davecgh/go-spew/spew"
+	log "github.com/sirupsen/logrus"
 )
 
 type Client struct {
@@ -58,6 +61,14 @@ func (c Client) terraformCmd(args []string) *exec.Cmd {
 //  allow for terraform commands.
 // Nothing is done if the Config content is empty
 func (c Client) ClientInit() error {
+	logger := log.WithFields(log.Fields{
+		"topic":   "taos",
+		"package": "terraform",
+		"event":   "client_init",
+	})
+
+	logger.Debug("initalizing terraform client")
+
 	if len(c.Terraform.Config) <= 0 {
 		return fmt.Errorf(ErrorMissingConfig)
 	}
@@ -95,6 +106,8 @@ func (c Client) ClientInit() error {
 			return err
 		}
 	}
+
+	logger.Debug(spew.Sdump(c.Terraform))
 
 	return nil
 }
@@ -181,10 +194,10 @@ func (c Client) Plan() (string, error) {
 	return stdout.String(), nil
 }
 
-func (c Client) Apply() (string, error) {
+func (c Client) Apply() ([]byte, string, error) {
 	_, err := c.Plan()
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
 
 	applyArgs := []string{
@@ -204,16 +217,23 @@ func (c Client) Apply() (string, error) {
 	applyCmd.Stderr = &stderr
 	err = applyCmd.Run()
 	if err != nil {
-		return "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr.String()))
+		return nil, "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr.String()))
 	}
 
-	return stdout.String(), nil
+	// Read the state file in order to return its contents
+	statefile := filepath.Join(c.Terraform.WorkingDir, c.Terraform.StateFileName)
+	state, err := ioutil.ReadFile(statefile)
+	if err != nil {
+		return nil, "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr.String()))
+	}
+
+	return state, stdout.String(), nil
 }
 
-func (c Client) Destroy() (string, error) {
+func (c Client) Destroy() ([]byte, string, error) {
 	_, err := c.Plan()
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
 
 	destroyArgs := []string{
@@ -235,8 +255,14 @@ func (c Client) Destroy() (string, error) {
 	destroyCmd.Stderr = &stderr
 	err = destroyCmd.Run()
 	if err != nil {
-		return "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr.String()))
+		return nil, "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr.String()))
 	}
 
-	return stdout.String(), nil
+	// Read the state file in order to return its contents
+	state, err := ioutil.ReadFile(statefile)
+	if err != nil {
+		return nil, "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr.String()))
+	}
+
+	return state, stdout.String(), nil
 }
