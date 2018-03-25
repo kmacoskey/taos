@@ -2,8 +2,11 @@ package app
 
 import (
 	"fmt"
+
 	"github.com/spf13/viper"
 )
+
+var GlobalServerConfig ServerConfig
 
 type ServerConfig struct {
 	// Required - Defaults to 8080 - Listen and Serve port

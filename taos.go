@@ -2,27 +2,28 @@ package main
 
 import (
 	"fmt"
+	"net/http"
+
 	"github.com/gorilla/mux"
 	"github.com/kmacoskey/taos/app"
 	"github.com/kmacoskey/taos/handlers"
-	"net/http"
 )
 
-var config app.ServerConfig
+// var ServerConfig app.ServerConfig
 
 func main() {
 	// Server configuration
-	if err := app.LoadServerConfig(&config, "."); err != nil {
+	if err := app.LoadServerConfig(&app.GlobalServerConfig, "."); err != nil {
 		panic(fmt.Errorf("Invalid application configuration: %s", err))
 	}
 
 	// Logging
-	if err := app.InitLogger(config.Logging); err != nil {
+	if err := app.InitLogger(app.GlobalServerConfig.Logging); err != nil {
 		panic(fmt.Errorf("Logging Initialization Failed: %s", err))
 	}
 
 	// Database Connection
-	db, err := app.DatabaseConnect(config.ConnStr)
+	db, err := app.DatabaseConnect(app.GlobalServerConfig.ConnStr)
 	if err != nil {
 		panic(fmt.Errorf("Connection to Database Failed: %s", err))
 	}
