@@ -1,6 +1,8 @@
 package terraform
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -51,7 +53,7 @@ func (c Client) terraformCmd(args []string) *exec.Cmd {
 // Nothing is done if the Config content is empty
 func (c Client) ClientInit() error {
 	if len(c.Terraform.Config) <= 0 {
-		return fmt.Errorf("refusing to create client without terraform configuration content")
+		return fmt.Errorf(ErrorMissingConfig)
 	}
 
 	// Create temporary working directory
@@ -92,16 +94,18 @@ func (c Client) ClientInit() error {
 }
 
 func (c Client) ClientDestroy() error {
-	// Delete the working directory
-	os.RemoveAll(c.Terraform.WorkingDir)
+	_, err := os.Stat(c.Terraform.WorkingDir)
+	if os.IsNotExist(err) {
+		return errors.New(ErrorClientDestroyNoDir)
+	}
 
-	return nil
+	return os.RemoveAll(c.Terraform.WorkingDir)
 }
 
-func (c Client) Init() error {
+func (c Client) Init() (string, error) {
 	err := c.ClientInit()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	initArgs := []string{
@@ -117,25 +121,33 @@ func (c Client) Init() error {
 	// Perform terraform actions from within the temporary working directory
 	initCmd.Dir = c.Terraform.WorkingDir
 
-	output, err := initCmd.CombinedOutput()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	initCmd.Stdout = &stdout
+	initCmd.Stderr = &stderr
+	err = initCmd.Run()
 	if err != nil {
-		return err
+		return "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr.String()))
 	}
 
 	re := regexp.MustCompile(`Terraform initialized in an empty directory!`)
-	matches := re.FindStringSubmatch(string(output))
+	matches := re.FindStringSubmatch(stdout.String())
 
+	// This is not the stdout or stderr of the terraform command.
+	// 	Instead, this is expected to be a crafted error message because
+	//  terraform doesn't error when no config is used, only invalid config.
+	//  But we want to error when no config is used.
 	if len(matches) > 0 {
-		return fmt.Errorf("terraform init command failed.\nerror: %s", "Terraform initialized in an empty directory!")
+		return "", fmt.Errorf("terraform init command failed.\nerror: %s", "Terraform initialized in an empty directory!")
 	}
 
-	return nil
+	return stdout.String(), nil
 }
 
-func (c Client) Plan() error {
-	err := c.Init()
+func (c Client) Plan() (string, error) {
+	_, err := c.Init()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	planArgs := []string{
@@ -151,18 +163,22 @@ func (c Client) Plan() error {
 	planCmd := c.terraformCmd(planArgs)
 	planCmd.Dir = c.Terraform.WorkingDir
 
-	_, err = planCmd.CombinedOutput()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	planCmd.Stdout = &stdout
+	planCmd.Stderr = &stderr
+	err = planCmd.Run()
 	if err != nil {
-		return err
+		return "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr.String()))
 	}
 
-	return nil
+	return stdout.String(), nil
 }
 
-func (c Client) Apply() error {
-	err := c.Plan()
+func (c Client) Apply() (string, error) {
+	_, err := c.Plan()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	applyArgs := []string{
@@ -176,18 +192,22 @@ func (c Client) Apply() error {
 	applyCmd := c.terraformCmd(applyArgs)
 	applyCmd.Dir = c.Terraform.WorkingDir
 
-	_, err = applyCmd.CombinedOutput()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	applyCmd.Stdout = &stdout
+	applyCmd.Stderr = &stderr
+	err = applyCmd.Run()
 	if err != nil {
-		return err
+		return "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr.String()))
 	}
 
-	return nil
+	return stdout.String(), nil
 }
 
-func (c Client) Destroy() error {
-	err := c.Plan()
+func (c Client) Destroy() (string, error) {
+	_, err := c.Plan()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	destroyArgs := []string{
@@ -203,10 +223,14 @@ func (c Client) Destroy() error {
 	destroyCmd := c.terraformCmd(destroyArgs)
 	destroyCmd.Dir = c.Terraform.WorkingDir
 
-	_, err = destroyCmd.CombinedOutput()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	destroyCmd.Stdout = &stdout
+	destroyCmd.Stderr = &stderr
+	err = destroyCmd.Run()
 	if err != nil {
-		return err
+		return "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr.String()))
 	}
 
-	return nil
+	return stdout.String(), nil
 }
