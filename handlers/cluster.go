@@ -117,7 +117,7 @@ func (ch *ClusterHandler) CreateCluster() app.Adapter {
 				"request": context.RequestId(),
 			})
 
-			logger.Info("request new cluster")
+			logger.Info("request to create cluster")
 
 			body, _ := ioutil.ReadAll(r.Body)
 
@@ -185,7 +185,7 @@ func (ch *ClusterHandler) GetCluster() app.Adapter {
 			vars := mux.Vars(r)
 			id := vars["id"]
 
-			logger.Info(fmt.Sprintf("get cluster '%s'", id))
+			logger.Info(fmt.Sprintf("request to get cluster '%s'", id))
 
 			// Will not continue if missing id in request
 			if len(id) <= 0 {
@@ -251,6 +251,8 @@ func (ch *ClusterHandler) GetClusters() app.Adapter {
 				"request": context.RequestId(),
 			})
 
+			logger.Info("request to get clusters")
+
 			clusters, err := ch.cs.GetClusters(context)
 			// Internal error in any layer below handler
 			if err != nil {
@@ -305,7 +307,7 @@ func (ch *ClusterHandler) DeleteCluster() app.Adapter {
 			vars := mux.Vars(r)
 			id := vars["id"]
 
-			logger.Info(fmt.Sprintf("delete cluster '%s'", id))
+			logger.Info(fmt.Sprintf("request to delete cluster '%s'", id))
 
 			// Will not continue if missing id in request
 			if len(id) <= 0 {

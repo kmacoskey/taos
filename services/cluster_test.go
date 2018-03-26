@@ -88,12 +88,19 @@ var _ = Describe("Cluster", func() {
 					return c.Status
 				}, 5, 0.5).Should(Equal("provision_success"))
 			})
-			It("Should eventually set the message to the terraform client output", func() {
+			It("Should eventually set the message to the Terraform client output", func() {
 				Eventually(func() string {
 					c, err := cs.GetCluster(rc, cluster.Id)
 					Expect(err).NotTo(HaveOccurred())
 					return c.Message
 				}, 5, 0.5).Should(ContainSubstring("Apply complete! Resources: 0 added, 0 changed, 0 destroyed."))
+			})
+			It("Should eventually set the Terraform state", func() {
+				Eventually(func() []byte {
+					c, err := cs.GetCluster(rc, cluster.Id)
+					Expect(err).NotTo(HaveOccurred())
+					return c.TerraformState
+				}, 5, 0.5).ShouldNot(BeNil())
 			})
 		})
 
@@ -267,6 +274,13 @@ var _ = Describe("Cluster", func() {
 					Expect(err).NotTo(HaveOccurred())
 					return c.Message
 				}, 5, 0.5).Should(ContainSubstring("Destroy complete! Resources: 0 destroyed."))
+			})
+			It("Should eventually set the Terraform state", func() {
+				Eventually(func() []byte {
+					c, err := cs.GetCluster(rc, cluster.Id)
+					Expect(err).NotTo(HaveOccurred())
+					return c.TerraformState
+				}, 5, 0.5).ShouldNot(BeNil())
 			})
 		})
 

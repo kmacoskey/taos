@@ -94,7 +94,7 @@ func (dao *ClusterDao) UpdateCluster(db *sqlx.DB, cluster *models.Cluster, reque
 		"request": requestId,
 	})
 
-	logger.Info("update cluster entry in database")
+	logger.Info("updating cluster")
 
 	updated_cluster := models.Cluster{}
 
@@ -105,8 +105,8 @@ func (dao *ClusterDao) UpdateCluster(db *sqlx.DB, cluster *models.Cluster, reque
 	}
 	logger.Debug("transaction created")
 
-	logger.Debug(fmt.Sprintf("UPDATE clusters SET status = '%s', message = '%s' WHERE id = '%s' RETURNING *", cluster.Status, cluster.Message, cluster.Id))
-	rows, err := tx.Queryx(`UPDATE clusters SET status = $1, message = $2 WHERE id = $3 RETURNING *`, &cluster.Status, &cluster.Message, &cluster.Id)
+	logger.Debug(fmt.Sprintf("UPDATE clusters SET status = '%s', message = '%s', terraform_state = '%s' WHERE id = '%s' RETURNING *", cluster.Status, cluster.Message, cluster.TerraformState, cluster.Id))
+	rows, err := tx.Queryx(`UPDATE clusters SET status = $1, message = $2, terraform_state = $3 WHERE id = $4 RETURNING *`, &cluster.Status, &cluster.Message, &cluster.TerraformState, &cluster.Id)
 	if err != nil {
 		tx.Rollback()
 		logger.Debug("transaction rolledback")
@@ -149,7 +149,7 @@ func (dao *ClusterDao) GetCluster(db *sqlx.DB, id string, requestId string) (*mo
 		"request": requestId,
 	})
 
-	logger.Info("get cluster from database")
+	logger.Info(fmt.Sprintf("load cluster '%s'", id))
 
 	cluster := models.Cluster{}
 

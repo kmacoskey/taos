@@ -24,6 +24,7 @@ var (
 				name 							text,
 				status 						text,
 				message 					text,
+				terraform_state 	text,
 				terraform_config 	json
 		)`
 	truncate_clusters = `TRUNCATE TABLE clusters`
@@ -76,9 +77,9 @@ var _ = Describe("Cluster", func() {
 		tx, err = db.Beginx()
 		Expect(err).NotTo(HaveOccurred())
 
-		cluster1 = &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster_1", Status: "provisioned", Message: ""}
-		cluster2 = &models.Cluster{Id: "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster_2", Status: "provisioned", Message: ""}
-		notacluster = &models.Cluster{Id: "a19e1bfe-0ec5-11ea-ba89-0ed0f89f718b", Name: "notacluster", Status: "nothere", Message: ""}
+		cluster1 = &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster_1", Status: "provisioned", Message: "", TerraformState: nil}
+		cluster2 = &models.Cluster{Id: "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster_2", Status: "provisioned", Message: "", TerraformState: nil}
+		notacluster = &models.Cluster{Id: "a19e1bfe-0ec5-11ea-ba89-0ed0f89f718b", Name: "notacluster", Status: "nothere", Message: "", TerraformState: nil}
 		terraformConfig = []byte(`{"provider":{"google":{}}}`)
 	})
 
@@ -97,6 +98,7 @@ var _ = Describe("Cluster", func() {
 	// ======================================================================
 
 	Describe("Creating cluster", func() {
+
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
 				cluster, err = dao.CreateCluster(db, terraformConfig, "")
@@ -155,15 +157,11 @@ var _ = Describe("Cluster", func() {
 	// ======================================================================
 
 	Describe("Getting a Cluster", func() {
+
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				rows, err := db.NamedQuery(`INSERT INTO clusters (id,name,status,message) VALUES (:id,:name,:status,:message) RETURNING id`, cluster1)
-				Expect(err).NotTo(HaveOccurred())
-				var cluster_id string
-				if rows.Next() {
-					rows.Scan(&cluster_id)
-				}
-				cluster, err = dao.GetCluster(db, cluster_id, requestId)
+				db.MustExec("INSERT INTO clusters (id,name,status,message,terraform_state) VALUES ($1,$2,$3,$4,$5)", cluster1.Id, cluster1.Name, cluster1.Status, cluster1.Message, cluster1.TerraformState)
+				cluster, err = dao.GetCluster(db, cluster1.Id, requestId)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -216,8 +214,8 @@ var _ = Describe("Cluster", func() {
 	Describe("Retrieving clusters", func() {
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				db.MustExec("INSERT INTO clusters (id, name, status, message) VALUES ($1, $2, $3, $4)", cluster1.Id, cluster1.Name, cluster1.Status, cluster1.Message)
-				db.MustExec("INSERT INTO clusters (id, name, status, message) VALUES ($1, $2, $3, $4)", cluster2.Id, cluster2.Name, cluster2.Status, cluster2.Message)
+				db.MustExec("INSERT INTO clusters (id,name,status,message,terraform_state) VALUES ($1,$2,$3,$4,$5)", cluster1.Id, cluster1.Name, cluster1.Status, cluster1.Message, cluster1.TerraformState)
+				db.MustExec("INSERT INTO clusters (id,name,status,message,terraform_state) VALUES ($1,$2,$3,$4,$5)", cluster2.Id, cluster2.Name, cluster2.Status, cluster2.Message, cluster2.TerraformState)
 				clusters, err = dao.GetClusters(db, requestId)
 			})
 			It("Should not error", func() {
@@ -260,7 +258,7 @@ var _ = Describe("Cluster", func() {
 	Describe("Updating a cluster", func() {
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				db.MustExec("INSERT INTO clusters (id, name, status, message) VALUES ($1, $2, $3, $4)", cluster1.Id, cluster1.Name, cluster1.Status, cluster1.Message)
+				db.MustExec("INSERT INTO clusters (id,name,status,message,terraform_state) VALUES ($1,$2,$3,$4,$5)", cluster1.Id, cluster1.Name, cluster1.Status, cluster1.Message, cluster1.TerraformState)
 				updated_cluster := &models.Cluster{
 					Id:     cluster1.Id,
 					Status: "different_status",
@@ -291,7 +289,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("When nothing is different", func() {
 			BeforeEach(func() {
-				db.MustExec("INSERT INTO clusters (id, name, status, message) VALUES ($1, $2, $3, $4)", cluster1.Id, cluster1.Name, cluster1.Status, cluster1.Message)
+				db.MustExec("INSERT INTO clusters (id,name,status,message,terraform_state) VALUES ($1,$2,$3,$4,$5)", cluster1.Id, cluster1.Name, cluster1.Status, cluster1.Message, cluster1.TerraformState)
 				cluster, err = dao.UpdateCluster(db, cluster1, requestId)
 			})
 			It("Should not error", func() {
@@ -345,13 +343,8 @@ var _ = Describe("Cluster", func() {
 	Describe("Deleting clusters", func() {
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				rows, insert_err := db.NamedQuery(`INSERT INTO clusters (id,name,status,message) VALUES (:id,:name,:status,:message) RETURNING id`, cluster1)
-				Expect(insert_err).NotTo(HaveOccurred())
-				var id string
-				if rows.Next() {
-					rows.Scan(&id)
-				}
-				cluster, err = dao.DeleteCluster(db, id, requestId)
+				db.MustExec("INSERT INTO clusters (id,name,status,message,terraform_state) VALUES ($1,$2,$3,$4,$5)", cluster1.Id, cluster1.Name, cluster1.Status, cluster1.Message, cluster1.TerraformState)
+				cluster, err = dao.DeleteCluster(db, cluster1.Id, requestId)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
