@@ -19,17 +19,18 @@ import (
 var _ = Describe("Cluster", func() {
 
 	var (
-		cluster                *models.Cluster
-		cluster1UUID           string
-		cluster1               *models.Cluster
-		cluster2UUID           string
-		cluster2               *models.Cluster
-		clusters               []models.Cluster
-		cs                     *ClusterService
-		rc                     app.RequestContext
-		err                    error
-		validTerraformConfig   []byte
-		invalidTerraformConfig []byte
+		cluster                       *models.Cluster
+		cluster1UUID                  string
+		cluster1                      *models.Cluster
+		cluster2UUID                  string
+		cluster2                      *models.Cluster
+		clusters                      []models.Cluster
+		cs                            *ClusterService
+		rc                            app.RequestContext
+		err                           error
+		validTerraformConfig          []byte
+		invalidTerraformConfig        []byte
+		validNoOutputsTerraformConfig []byte
 	)
 
 	BeforeEach(func() {
@@ -38,7 +39,8 @@ var _ = Describe("Cluster", func() {
 		// Create a new RequestContext for each test
 		rc = app.RequestContext{}
 
-		validTerraformConfig = []byte(`{"provider":{"google":{}}}`)
+		validTerraformConfig = []byte(`{"provider":{"google":{"project":"data-gp-toolsmiths","region":"us-central1"}},"output":{"foo":{"value":"bar"}}}`)
+		validNoOutputsTerraformConfig = []byte(`{"provider":{"google":{"project":"data-gp-toolsmiths","region":"us-central1"}}}`)
 		invalidTerraformConfig = []byte(`notjson`)
 
 		cluster1UUID = "a19e2758-0ec5-11e8-ba89-0ed5f89f718b"
@@ -102,6 +104,13 @@ var _ = Describe("Cluster", func() {
 					return c.TerraformState
 				}, 5, 0.5).ShouldNot(BeNil())
 			})
+			It("Should eventually set the Terraform outputs", func() {
+				Eventually(func() []byte {
+					c, err := cs.GetCluster(rc, cluster.Id)
+					Expect(err).NotTo(HaveOccurred())
+					return c.Outputs
+				}, 5, 0.5).ShouldNot(BeNil())
+			})
 		})
 
 		Context("When a cluster is not returned from the dao", func() {
@@ -140,6 +149,49 @@ var _ = Describe("Cluster", func() {
 					Expect(err).NotTo(HaveOccurred())
 					return c.Message
 				}, 5, 0.5).Should(ContainSubstring(terraform.ErrorInvalidConfig))
+			})
+		})
+
+		Context("When there are no outputs defined in the config", func() {
+			BeforeEach(func() {
+				clustersMap := make(map[string]*models.Cluster)
+				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
+				rc.SetTerraformConfig(validNoOutputsTerraformConfig)
+				cluster, err = cs.CreateCluster(rc)
+			})
+			It("Should not error", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+			It("Should return a cluster", func() {
+				Expect(cluster).NotTo(BeNil())
+			})
+			It("Should eventually be provisioned", func() {
+				Eventually(func() string {
+					c, err := cs.GetCluster(rc, cluster.Id)
+					Expect(err).NotTo(HaveOccurred())
+					return c.Status
+				}, 5, 0.5).Should(Equal("provision_success"))
+			})
+			It("Should eventually set the message to the Terraform client output", func() {
+				Eventually(func() string {
+					c, err := cs.GetCluster(rc, cluster.Id)
+					Expect(err).NotTo(HaveOccurred())
+					return c.Message
+				}, 5, 0.5).Should(ContainSubstring("Apply complete! Resources: 0 added, 0 changed, 0 destroyed."))
+			})
+			It("Should eventually set the Terraform state", func() {
+				Eventually(func() []byte {
+					c, err := cs.GetCluster(rc, cluster.Id)
+					Expect(err).NotTo(HaveOccurred())
+					return c.TerraformState
+				}, 5, 0.5).ShouldNot(BeNil())
+			})
+			It("Should eventually set the Terraform to nil", func() {
+				Eventually(func() []byte {
+					c, err := cs.GetCluster(rc, cluster.Id)
+					Expect(err).NotTo(HaveOccurred())
+					return c.Outputs
+				}, 5, 0.5).Should(BeNil())
 			})
 		})
 

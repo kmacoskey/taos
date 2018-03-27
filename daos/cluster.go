@@ -26,22 +26,15 @@ func NewClusterDao() *ClusterDao {
 }
 
 func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, requestId string) (*models.Cluster, error) {
-	logger := log.WithFields(log.Fields{
-		"topic":   "taos",
-		"package": "daos",
-		"event":   "create_cluster",
-		"request": requestId,
-	})
-
-	logger.Info("create cluster entry in database")
+	logger := log.WithFields(log.Fields{"package": "daos", "event": "create_cluster", "request": requestId})
 
 	if len(config) == 0 {
 		logger.Error("cannot create cluster without config")
-		logger.Error("failed to create cluster")
 		return nil, errors.New("cannot create cluster without config")
 	}
 
 	cluster := models.Cluster{
+		Id:              requestId,
 		Name:            sillyname.GenerateStupidName(),
 		Status:          models.ClusterStatusRequested,
 		TerraformConfig: config,
@@ -52,36 +45,51 @@ func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, requestId strin
 		logger.Error(err.Error())
 		return nil, err
 	}
-	logger.Debug("transaction created")
 
-	logger.Debug(fmt.Sprintf(`
-		INSERT INTO clusters 
-		(name,status,terraform_config) 
-		VALUES (%s,%s,%s) 
-		RETURNING id`, cluster.Name, cluster.Status, cluster.TerraformConfig))
-	rows, err := tx.NamedQuery(`
-		INSERT INTO clusters 
-		(name,status,terraform_config) 
-		VALUES (:name,:status,:terraform_config) 
-		RETURNING id`, cluster)
+	_, err = tx.NamedQuery(`
+		INSERT INTO clusters (id,name,status,terraform_config) 
+		VALUES (:id,:name,:status,:terraform_config) `, cluster)
 	if err != nil {
 		tx.Rollback()
-		logger.Debug("transaction rolledback")
 		logger.Error(err.Error())
-		logger.Error("failed to create cluster")
 		return nil, err
 	}
-	defer rows.Close()
-
-	var id string
-	if rows.Next() {
-		rows.Scan(&id)
-	}
-	cluster.Id = id
 
 	tx.Commit()
-	logger.Debug("transaction commited")
-	// logger.Debug(cluster)
+	logger.Info("new cluster created in database")
+
+	return &cluster, nil
+}
+
+func (dao *ClusterDao) GetCluster(db *sqlx.DB, clusterId string, requestId string) (*models.Cluster, error) {
+	logger := log.WithFields(log.Fields{"package": "daos", "event": "get_cluster", "request": requestId})
+
+	cluster := models.Cluster{}
+
+	if len(requestId) == 0 {
+		logger.Error("cannot get cluster without requestId")
+		return nil, errors.New("cannot get cluster without requestId")
+	} else if len(clusterId) == 0 {
+		logger.Error("cannot get cluster without clusterId")
+		return nil, errors.New("cannot get cluster without clusterId")
+	}
+
+	tx, err := db.Beginx()
+	if err != nil {
+		logger.Error(err.Error())
+		return nil, err
+	}
+
+	err = tx.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", clusterId)
+	if err != nil {
+		tx.Rollback()
+		logger.Error(err.Error())
+		return nil, err
+	}
+
+	tx.Commit()
+
+	logger.Info(fmt.Sprintf("cluster '%s' retrieved", clusterId))
 
 	return &cluster, nil
 }
@@ -105,8 +113,8 @@ func (dao *ClusterDao) UpdateCluster(db *sqlx.DB, cluster *models.Cluster, reque
 	}
 	logger.Debug("transaction created")
 
-	logger.Debug(fmt.Sprintf("UPDATE clusters SET status = '%s', message = '%s', terraform_state = '%s' WHERE id = '%s' RETURNING *", cluster.Status, cluster.Message, cluster.TerraformState, cluster.Id))
-	rows, err := tx.Queryx(`UPDATE clusters SET status = $1, message = $2, terraform_state = $3 WHERE id = $4 RETURNING *`, &cluster.Status, &cluster.Message, &cluster.TerraformState, &cluster.Id)
+	logger.Debug(fmt.Sprintf("UPDATE clusters SET status = '%s', message = '%s', terraform_state = '%s', outputs = '%s' WHERE id = '%s' RETURNING *", cluster.Status, cluster.Message, cluster.TerraformState, cluster.Outputs, cluster.Id))
+	rows, err := tx.Queryx(`UPDATE clusters SET status = $1, message = $2, terraform_state = $3, outputs = $4 WHERE id = $5 RETURNING *`, &cluster.Status, &cluster.Message, &cluster.TerraformState, &cluster.Outputs, &cluster.Id)
 	if err != nil {
 		tx.Rollback()
 		logger.Debug("transaction rolledback")
@@ -139,47 +147,6 @@ func (dao *ClusterDao) UpdateCluster(db *sqlx.DB, cluster *models.Cluster, reque
 	logger.Info(fmt.Sprintf("cluster '%s' status '%s'", updated_cluster.Id, updated_cluster.Status))
 
 	return &updated_cluster, nil
-}
-
-func (dao *ClusterDao) GetCluster(db *sqlx.DB, id string, requestId string) (*models.Cluster, error) {
-	logger := log.WithFields(log.Fields{
-		"topic":   "taos",
-		"package": "daos",
-		"event":   "get_cluster",
-		"request": requestId,
-	})
-
-	logger.Info(fmt.Sprintf("load cluster '%s'", id))
-
-	cluster := models.Cluster{}
-
-	tx, err := db.Beginx()
-	if err != nil {
-		logger.Error(err.Error())
-		return nil, err
-	}
-	logger.Debug("transaction created")
-
-	logger.Debug(fmt.Sprintf("SELECT * FROM clusters WHERE id=%s", id))
-	err = tx.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", id)
-	if err == nil {
-		tx.Commit()
-		logger.Debug("transaction commited")
-		return &cluster, nil
-	}
-
-	tx.Rollback()
-	logger.Debug("transaction rolledback")
-
-	switch {
-	case noRelation.MatchString(err.Error()):
-		logger.Error(err.Error())
-		return nil, err
-	default:
-		logger.Error(err.Error())
-		logger.Error("could not get cluster")
-		return nil, err
-	}
 }
 
 func (dao *ClusterDao) GetClusters(db *sqlx.DB, requestId string) ([]models.Cluster, error) {

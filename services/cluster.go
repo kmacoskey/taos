@@ -240,7 +240,7 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 		return
 	}
 
-	state, output, err := tc.Apply()
+	state, stdout, err := tc.Apply()
 	if err != nil {
 		c.Status = "provision_failed"
 		c.Message = err.Error()
@@ -250,6 +250,24 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 		if err != nil {
 			logger.Error(err.Error())
 			logger.Error("failed to update cluster during provision failure")
+		}
+		return
+	}
+
+	// The state must be set in the client
+	//  in order to retrieve outputs
+	tc.Terraform.State = state
+
+	outputs, err := tc.Outputs()
+	if err != nil {
+		c.Status = "provision_failed"
+		c.Message = err.Error()
+		logger.Error(err.Error())
+		logger.Error("cluster provisioning failed during terraform output")
+		_, err := s.dao.UpdateCluster(s.db, c, requestId)
+		if err != nil {
+			logger.Error(err.Error())
+			logger.Error("failed to update cluster during terraform output")
 		}
 		return
 	}
@@ -270,7 +288,8 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 
 	if err == nil {
 		c.Status = "provision_success"
-		c.Message = output
+		c.Message = stdout
+		c.Outputs = outputs
 		c.TerraformState = state
 		_, err := s.dao.UpdateCluster(s.db, c, requestId)
 		if err != nil {

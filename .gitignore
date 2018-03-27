@@ -6,3 +6,5 @@ taos
 .glide/
 vendor/
 *.coverprofile
+terraform.tfstate
+terraform.tfstate.backup

@@ -26,27 +26,55 @@ type ClusterHandler struct {
 	cs clusterService
 }
 
-type RequestResponse struct {
-	RequestId string       `json:"request_id"`
-	Status    string       `json:"status"`
-	Data      ResponseData `json:"data"`
-}
-
-type ResponseData struct {
-	Type       string `json:"type"`
-	Attributes interface{}
-}
-
-type ResponseAttributes interface{}
-
 type ClusterResponse struct {
-	Id      string `json:"id"`
-	Name    string `json:"name"`
-	Status  string `json:"status"`
-	Message string `json:"message"`
+	RequestId string              `json:"request_id"`
+	Status    string              `json:"status"`
+	Data      ClusterResponseData `json:"data"`
+}
+
+type ClusterResponseData struct {
+	Type       string `json:"type"`
+	Attributes ClusterResponseAttributes
+}
+
+type ClustersResponse struct {
+	RequestId string               `json:"request_id"`
+	Status    string               `json:"status"`
+	Data      ClustersResponseData `json:"data"`
+}
+
+type ClustersResponseData struct {
+	Type       string `json:"type"`
+	Attributes []ClusterResponseAttributes
+}
+
+type ClusterResponseAttributes struct {
+	Id               string            `json:"id"`
+	Name             string            `json:"name"`
+	Status           string            `json:"status"`
+	Message          string            `json:"message"`
+	TerraformOutputs []TerraformOutput `json:"outputs"`
+}
+
+type TerraformOutput struct {
+	Name      string `json:"name" db:"name"`
+	Sensitive string `json:"sensitive" db:"sensitive"`
+	Type      string `json:"type" db:"type"`
+	Value     string `json:"value" db:"value"`
 }
 
 type ErrorResponse struct {
+	RequestId string            `json:"request_id"`
+	Status    string            `json:"status"`
+	Data      ErrorResponseData `json:"data"`
+}
+
+type ErrorResponseData struct {
+	Type       string `json:"type"`
+	Attributes *ErrorResponseAttributes
+}
+
+type ErrorResponseAttributes struct {
 	Title  string `json:"title"`
 	Detail string `json:"detail"`
 }
@@ -83,13 +111,13 @@ func ServeClusterResources(router *mux.Router, db *sqlx.DB) {
 	)).Methods("DELETE")
 }
 
-func newErrorResponse(response *ErrorResponse, request_id string) *RequestResponse {
-	response_data := ResponseData{
+func newErrorResponse(response *ErrorResponseAttributes, request_id string) *ErrorResponse {
+	response_data := ErrorResponseData{
 		Type:       "error",
 		Attributes: response,
 	}
 
-	request_response := RequestResponse{
+	request_response := ErrorResponse{
 		RequestId: request_id,
 		Data:      response_data,
 	}
@@ -123,7 +151,7 @@ func (ch *ClusterHandler) CreateCluster() app.Adapter {
 
 			// Will not continue if missing terraform configuration in request
 			if len(body) <= 0 {
-				response := ErrorResponse{
+				response := ErrorResponseAttributes{
 					Title:  "create_cluster_error",
 					Detail: "Missing required terraform configuration for create cluster request",
 				}
@@ -140,7 +168,7 @@ func (ch *ClusterHandler) CreateCluster() app.Adapter {
 			cluster, err := ch.cs.CreateCluster(context)
 			// Internal error in any layer below handler
 			if err != nil {
-				response := ErrorResponse{
+				response := ErrorResponseAttributes{
 					Title:  "create_cluster_error",
 					Detail: err.Error(),
 				}
@@ -189,7 +217,7 @@ func (ch *ClusterHandler) GetCluster() app.Adapter {
 
 			// Will not continue if missing id in request
 			if len(id) <= 0 {
-				response := ErrorResponse{
+				response := ErrorResponseAttributes{
 					Title:  "get_cluster_error",
 					Detail: "Missing required cluster id",
 				}
@@ -202,7 +230,7 @@ func (ch *ClusterHandler) GetCluster() app.Adapter {
 			cluster, err := ch.cs.GetCluster(context, id)
 			// Internal error in any layer below handler
 			if err != nil {
-				response := ErrorResponse{
+				response := ErrorResponseAttributes{
 					Title:  "get_cluster_error",
 					Detail: err.Error(),
 				}
@@ -214,7 +242,7 @@ func (ch *ClusterHandler) GetCluster() app.Adapter {
 
 			// Cluster does not exist
 			if cluster == nil {
-				response := ErrorResponse{
+				response := ErrorResponseAttributes{
 					Title:  "get_cluster_error",
 					Detail: "cluster not found",
 				}
@@ -256,7 +284,7 @@ func (ch *ClusterHandler) GetClusters() app.Adapter {
 			clusters, err := ch.cs.GetClusters(context)
 			// Internal error in any layer below handler
 			if err != nil {
-				response := ErrorResponse{
+				response := ErrorResponseAttributes{
 					Title:  "get_clusters_error",
 					Detail: err.Error(),
 				}
@@ -268,7 +296,7 @@ func (ch *ClusterHandler) GetClusters() app.Adapter {
 
 			// No clusters exists
 			if clusters == nil {
-				response := ErrorResponse{
+				response := ErrorResponseAttributes{
 					Title:  "get_clusters_error",
 					Detail: "clusters not found",
 				}
@@ -311,7 +339,7 @@ func (ch *ClusterHandler) DeleteCluster() app.Adapter {
 
 			// Will not continue if missing id in request
 			if len(id) <= 0 {
-				response := ErrorResponse{
+				response := ErrorResponseAttributes{
 					Title:  "delete_cluster_error",
 					Detail: "Missing required cluster id",
 				}
@@ -324,7 +352,7 @@ func (ch *ClusterHandler) DeleteCluster() app.Adapter {
 			cluster, err := ch.cs.DeleteCluster(context, id)
 			// Internal error in any layer below handler
 			if err != nil {
-				response := ErrorResponse{
+				response := ErrorResponseAttributes{
 					Title:  "delete_cluster_error",
 					Detail: err.Error(),
 				}
@@ -336,7 +364,7 @@ func (ch *ClusterHandler) DeleteCluster() app.Adapter {
 
 			// Cluster does not exist
 			if cluster == nil {
-				response := ErrorResponse{
+				response := ErrorResponseAttributes{
 					Title:  "delete_cluster_error",
 					Detail: "cluster not found",
 				}
@@ -353,20 +381,29 @@ func (ch *ClusterHandler) DeleteCluster() app.Adapter {
 	}
 }
 
-func newClusterResponse(cluster *models.Cluster, request_id string) *RequestResponse {
-	cluster_response := ClusterResponse{
-		Id:      cluster.Id,
-		Name:    cluster.Name,
-		Status:  cluster.Status,
-		Message: cluster.Message,
+func newClusterResponse(cluster *models.Cluster, request_id string) *ClusterResponse {
+	terraform_outputs := []TerraformOutput{}
+	if cluster.Outputs != nil {
+		err := json.Unmarshal(cluster.Outputs, &terraform_outputs)
+		if err != nil {
+			panic(err)
+		}
 	}
 
-	response_data := ResponseData{
+	cluster_response := ClusterResponseAttributes{
+		Id:               cluster.Id,
+		Name:             cluster.Name,
+		Status:           cluster.Status,
+		Message:          cluster.Message,
+		TerraformOutputs: terraform_outputs,
+	}
+
+	response_data := ClusterResponseData{
 		Type:       "cluster",
 		Attributes: cluster_response,
 	}
 
-	request_response := RequestResponse{
+	request_response := ClusterResponse{
 		RequestId: request_id,
 		Data:      response_data,
 	}
@@ -374,27 +411,28 @@ func newClusterResponse(cluster *models.Cluster, request_id string) *RequestResp
 	return &request_response
 }
 
-func newClustersResponse(clusters []models.Cluster, request_id string) *RequestResponse {
+func newClustersResponse(clusters []models.Cluster, request_id string) *ClustersResponse {
 
-	cluster_list := []ClusterResponse{}
+	cluster_list := []ClusterResponseAttributes{}
 
 	for _, cluster := range clusters {
-		cluster_response := ClusterResponse{
-			Id:      cluster.Id,
-			Name:    cluster.Name,
-			Status:  cluster.Status,
-			Message: cluster.Message,
+		cluster_response := ClusterResponseAttributes{
+			Id:               cluster.Id,
+			Name:             cluster.Name,
+			Status:           cluster.Status,
+			Message:          cluster.Message,
+			TerraformOutputs: nil,
 		}
 
 		cluster_list = append(cluster_list, cluster_response)
 	}
 
-	response_data := ResponseData{
+	response_data := ClustersResponseData{
 		Type:       "clusters",
 		Attributes: cluster_list,
 	}
 
-	request_response := RequestResponse{
+	request_response := ClustersResponse{
 		RequestId: request_id,
 		Data:      response_data,
 	}
@@ -402,7 +440,7 @@ func newClustersResponse(clusters []models.Cluster, request_id string) *RequestR
 	return &request_response
 }
 
-func respondWithJson(w http.ResponseWriter, response *RequestResponse, status int) {
+func respondWithJson(w http.ResponseWriter, response interface{}, status int) {
 	js, err := json.Marshal(response)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

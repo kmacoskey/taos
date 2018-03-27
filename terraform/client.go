@@ -2,6 +2,7 @@ package terraform
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -38,12 +39,19 @@ func (c Client) Version() (string, error) {
 }
 
 func (c Client) terraformCmd(args []string) *exec.Cmd {
+	logger := log.WithFields(log.Fields{
+		"topic":   "taos",
+		"package": "terraform",
+		"event":   "run_command",
+	})
 
 	defaultArgs := []string{
 		"-no-color",
 	}
 
 	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf("terraform %s %s", strings.Join(args, " "), strings.Join(defaultArgs, " ")))
+
+	logger.Debug(cmd)
 
 	cmd.Env = []string{
 		fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
@@ -265,4 +273,59 @@ func (c Client) Destroy() ([]byte, string, error) {
 	}
 
 	return state, stdout.String(), nil
+}
+
+func (c Client) Outputs() ([]byte, error) {
+	logger := log.WithFields(log.Fields{
+		"topic":   "taos",
+		"package": "terraform",
+		"event":   "terraform_outputs",
+	})
+
+	_, err := c.Init()
+	if err != nil {
+		return nil, err
+	}
+
+	outputsArgs := []string{
+		"output",
+		"-json",
+	}
+
+	statefile := filepath.Join(c.Terraform.WorkingDir, c.Terraform.StateFileName)
+
+	outputsArgs = append(outputsArgs, fmt.Sprintf("-state=%s", statefile))
+
+	outputsCmd := c.terraformCmd(outputsArgs)
+	outputsCmd.Dir = c.Terraform.WorkingDir
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	outputsCmd.Stdout = &stdout
+	outputsCmd.Stderr = &stderr
+
+	err = outputsCmd.Run()
+	if err != nil {
+
+		re := regexp.MustCompile(`The state file either has no outputs defined`)
+		matches := re.FindStringSubmatch(stderr.String())
+
+		// No outputs being defined in the Terraform config is not an error, it's
+		//  more of a warning situation because lacking outputs makes the cluster
+		//  fairly useless (outputs are used to connect).
+		// Therefore doesn't return an error, just return empty outputs
+		if len(matches) > 0 {
+			logger.Warn("no outputs defined in Terraform config")
+			return nil, nil
+		} else {
+			return nil, errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr.String()))
+		}
+	}
+
+	json_outputs, err := json.Marshal(stdout.String())
+	if err != nil {
+		return nil, errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr.String()))
+	}
+
+	return json_outputs, nil
 }

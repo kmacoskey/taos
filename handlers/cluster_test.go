@@ -28,6 +28,7 @@ var _ = Describe("Cluster", func() {
 
 	var (
 		cluster1                        *models.Cluster
+		cluster1Response                ClusterResponseAttributes
 		cluster2                        *models.Cluster
 		cluster1_json                   []byte
 		cluster1_not_found_error        string
@@ -37,13 +38,33 @@ var _ = Describe("Cluster", func() {
 		json_err                        error
 		resp                            *http.Response
 		body                            []byte
-		response_json                   *RequestResponse
+		cluster_response_json           *ClusterResponse
+		clusters_response_json          *ClustersResponse
+		error_response_json             *ErrorResponse
 	)
 
 	BeforeEach(func() {
 		log.SetLevel(log.FatalLevel)
-		cluster1 = &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
-		cluster2 = &models.Cluster{Id: "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
+		var outputsBlob = []byte(`[{"name":"foobar","sensitive":"true","type":"foo","value":"bar"},{"name":"barfoo","sensitive":"false","type":"bar","value":"foo"}]`)
+		var outputs = []TerraformOutput{
+			TerraformOutput{
+				Name:      "foobar",
+				Sensitive: "true",
+				Type:      "foo",
+				Value:     "bar",
+			},
+			TerraformOutput{
+				Name:      "barfoo",
+				Sensitive: "false",
+				Type:      "bar",
+				Value:     "foo",
+			},
+		}
+
+		cluster1 = &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status", Outputs: outputsBlob}
+		cluster1Response = ClusterResponseAttributes{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status", Message: "", TerraformOutputs: outputs}
+		cluster2 = &models.Cluster{Id: "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status", Outputs: outputsBlob}
+
 		cluster1_json, err = json.Marshal(cluster1)
 		Expect(err).NotTo(HaveOccurred())
 		cluster1_not_found_error = fmt.Sprintf("could not retrieve cluster '%v'\n", cluster1.Id)
@@ -84,8 +105,8 @@ var _ = Describe("Cluster", func() {
 				body, err = ioutil.ReadAll(resp.Body)
 				Expect(err).NotTo(HaveOccurred())
 
-				response_json = &RequestResponse{}
-				json_err = json.Unmarshal(body, &response_json)
+				cluster_response_json = &ClusterResponse{}
+				json_err = json.Unmarshal(body, &cluster_response_json)
 			})
 			It("Should return a 202 OK", func() {
 				Expect(resp.StatusCode).To(Equal(http.StatusAccepted))
@@ -94,16 +115,18 @@ var _ = Describe("Cluster", func() {
 				Expect(json_err).NotTo(HaveOccurred())
 			})
 			It("Should return a request uuid", func() {
-				id, err := uuid.Parse(response_json.RequestId)
+				id, err := uuid.Parse(cluster_response_json.RequestId)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(id).NotTo(BeNil())
 			})
 			It("Should return a cluster", func() {
-				Expect(response_json.Data.Type).To(Equal("cluster"))
+				Expect(cluster_response_json.Data.Type).To(Equal("cluster"))
+			})
+			It("should return the expected terraform outputs", func() {
+				Expect(cluster_response_json.Data.Attributes).To(Equal(cluster1Response))
 			})
 		})
 
-		// FContext("When the service, daos, or terraform service has errored", func() {
 		Context("When the Cluster service, daos, or terraform service has errored", func() {
 			BeforeEach(func() {
 				// Unravel the middleware pattern to test only the Handler
@@ -128,8 +151,8 @@ var _ = Describe("Cluster", func() {
 				body, err = ioutil.ReadAll(resp.Body)
 				Expect(err).NotTo(HaveOccurred())
 
-				response_json = &RequestResponse{}
-				json_err = json.Unmarshal(body, &response_json)
+				error_response_json = &ErrorResponse{}
+				json_err = json.Unmarshal(body, &error_response_json)
 			})
 			It("Should return a 500", func() {
 				Expect(resp.StatusCode).To(Equal(http.StatusInternalServerError))
@@ -138,33 +161,14 @@ var _ = Describe("Cluster", func() {
 				Expect(json_err).NotTo(HaveOccurred())
 			})
 			It("Should return a request uuid", func() {
-				id, err := uuid.Parse(response_json.RequestId)
+				id, err := uuid.Parse(error_response_json.RequestId)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(id).NotTo(BeNil())
 			})
 			It("Should return an error", func() {
-				Expect(response_json.Data.Type).To(Equal("error"))
+				Expect(error_response_json.Data.Type).To(Equal("error"))
 			})
 		})
-
-		/*
-		 * Context("When the service has errored with insuffiecient resources", func() {
-		 *   It should return a 503
-		 *   It should return json
-		 *   The json returned should be
-		 *     {
-		 *       "request_id": "550e8400-e29b-41d4-a716-446655440000",
-		 *       "status": "503 Service Unavailable",
-		 *       "data": {
-		 *         "type": "error",
-		 *         "attributes": {
-		 *           "title": "Resources unavailable to satisfy request",
-		 *           "detail": "[??]"
-		 *         }
-		 *       }
-		 *     }
-		 * })
-		 */
 
 		Context("When no terraform config is included", func() {
 			BeforeEach(func() {
@@ -190,8 +194,8 @@ var _ = Describe("Cluster", func() {
 				body, err = ioutil.ReadAll(resp.Body)
 				Expect(err).NotTo(HaveOccurred())
 
-				response_json = &RequestResponse{}
-				json_err = json.Unmarshal(body, &response_json)
+				error_response_json = &ErrorResponse{}
+				json_err = json.Unmarshal(body, &error_response_json)
 			})
 			It("Should return a 400", func() {
 				Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
@@ -200,12 +204,12 @@ var _ = Describe("Cluster", func() {
 				Expect(json_err).NotTo(HaveOccurred())
 			})
 			It("Should return a request uuid", func() {
-				id, err := uuid.Parse(response_json.RequestId)
+				id, err := uuid.Parse(error_response_json.RequestId)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(id).NotTo(BeNil())
 			})
 			It("Should return an error", func() {
-				Expect(response_json.Data.Type).To(Equal("error"))
+				Expect(error_response_json.Data.Type).To(Equal("error"))
 			})
 		})
 
@@ -245,8 +249,8 @@ var _ = Describe("Cluster", func() {
 				body, err = ioutil.ReadAll(resp.Body)
 				Expect(err).NotTo(HaveOccurred())
 
-				response_json = &RequestResponse{}
-				json_err = json.Unmarshal(body, &response_json)
+				cluster_response_json = &ClusterResponse{}
+				json_err = json.Unmarshal(body, &cluster_response_json)
 			})
 			It("Should return a 200", func() {
 				Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -255,16 +259,16 @@ var _ = Describe("Cluster", func() {
 				Expect(json_err).NotTo(HaveOccurred())
 			})
 			It("Should return a request uuid", func() {
-				id, err := uuid.Parse(response_json.RequestId)
+				id, err := uuid.Parse(cluster_response_json.RequestId)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(id).NotTo(BeNil())
 			})
 			It("Should return a cluster", func() {
-				Expect(response_json.Data.Type).To(Equal("cluster"))
+				Expect(cluster_response_json.Data.Type).To(Equal("cluster"))
 			})
 			It("Should return the expected cluster", func() {
-				cr := response_json.Data.Attributes.(map[string]interface{})
-				Expect(cr["id"]).To(Equal(cluster1.Id))
+				cr := cluster_response_json.Data.Attributes
+				Expect(cr.Id).To(Equal(cluster1.Id))
 			})
 		})
 
@@ -291,8 +295,8 @@ var _ = Describe("Cluster", func() {
 				body, err = ioutil.ReadAll(resp.Body)
 				Expect(err).NotTo(HaveOccurred())
 
-				response_json = &RequestResponse{}
-				json_err = json.Unmarshal(body, &response_json)
+				error_response_json = &ErrorResponse{}
+				json_err = json.Unmarshal(body, &error_response_json)
 			})
 			It("Should return a 500", func() {
 				Expect(resp.StatusCode).To(Equal(http.StatusInternalServerError))
@@ -301,12 +305,12 @@ var _ = Describe("Cluster", func() {
 				Expect(json_err).NotTo(HaveOccurred())
 			})
 			It("Should return a request uuid", func() {
-				id, err := uuid.Parse(response_json.RequestId)
+				id, err := uuid.Parse(error_response_json.RequestId)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(id).NotTo(BeNil())
 			})
 			It("Should return a error", func() {
-				Expect(response_json.Data.Type).To(Equal("error"))
+				Expect(error_response_json.Data.Type).To(Equal("error"))
 			})
 		})
 
@@ -333,8 +337,8 @@ var _ = Describe("Cluster", func() {
 				body, err = ioutil.ReadAll(resp.Body)
 				Expect(err).NotTo(HaveOccurred())
 
-				response_json = &RequestResponse{}
-				json_err = json.Unmarshal(body, &response_json)
+				error_response_json = &ErrorResponse{}
+				json_err = json.Unmarshal(body, &error_response_json)
 			})
 			It("Should return a 404", func() {
 				Expect(resp.StatusCode).To(Equal(http.StatusNotFound))
@@ -343,12 +347,12 @@ var _ = Describe("Cluster", func() {
 				Expect(json_err).NotTo(HaveOccurred())
 			})
 			It("Should return a request uuid", func() {
-				id, err := uuid.Parse(response_json.RequestId)
+				id, err := uuid.Parse(error_response_json.RequestId)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(id).NotTo(BeNil())
 			})
 			It("Should return a error", func() {
-				Expect(response_json.Data.Type).To(Equal("error"))
+				Expect(error_response_json.Data.Type).To(Equal("error"))
 			})
 		})
 
@@ -374,8 +378,8 @@ var _ = Describe("Cluster", func() {
 				body, err = ioutil.ReadAll(resp.Body)
 				Expect(err).NotTo(HaveOccurred())
 
-				response_json = &RequestResponse{}
-				json_err = json.Unmarshal(body, &response_json)
+				error_response_json = &ErrorResponse{}
+				json_err = json.Unmarshal(body, &error_response_json)
 			})
 			It("Should return a 400", func() {
 				Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
@@ -384,12 +388,12 @@ var _ = Describe("Cluster", func() {
 				Expect(json_err).NotTo(HaveOccurred())
 			})
 			It("Should return a request uuid", func() {
-				id, err := uuid.Parse(response_json.RequestId)
+				id, err := uuid.Parse(error_response_json.RequestId)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(id).NotTo(BeNil())
 			})
 			It("Should return a error", func() {
-				Expect(response_json.Data.Type).To(Equal("error"))
+				Expect(error_response_json.Data.Type).To(Equal("error"))
 			})
 		})
 
@@ -428,8 +432,8 @@ var _ = Describe("Cluster", func() {
 				body, err = ioutil.ReadAll(resp.Body)
 				Expect(err).NotTo(HaveOccurred())
 
-				response_json = &RequestResponse{}
-				json_err = json.Unmarshal(body, &response_json)
+				clusters_response_json = &ClustersResponse{}
+				json_err = json.Unmarshal(body, &clusters_response_json)
 			})
 			It("Should return a 200", func() {
 				Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -438,19 +442,19 @@ var _ = Describe("Cluster", func() {
 				Expect(json_err).NotTo(HaveOccurred())
 			})
 			It("Should return a request uuid", func() {
-				id, err := uuid.Parse(response_json.RequestId)
+				id, err := uuid.Parse(clusters_response_json.RequestId)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(id).NotTo(BeNil())
 			})
 			It("Should return clusters", func() {
-				Expect(response_json.Data.Type).To(Equal("clusters"))
+				Expect(clusters_response_json.Data.Type).To(Equal("clusters"))
 			})
 			It("Should return the expected clusters", func() {
-				cr := response_json.Data.Attributes.([]interface{})
-				cr1 := cr[0].(map[string]interface{})
-				cr2 := cr[1].(map[string]interface{})
-				Expect(cr1["id"]).To(Equal(cluster1.Id))
-				Expect(cr2["id"]).To(Equal(cluster2.Id))
+				cr := clusters_response_json.Data.Attributes
+				cr1 := cr[0]
+				cr2 := cr[1]
+				Expect(cr1.Id).To(Equal(cluster1.Id))
+				Expect(cr2.Id).To(Equal(cluster2.Id))
 			})
 		})
 
@@ -476,8 +480,8 @@ var _ = Describe("Cluster", func() {
 				body, err = ioutil.ReadAll(resp.Body)
 				Expect(err).NotTo(HaveOccurred())
 
-				response_json = &RequestResponse{}
-				json_err = json.Unmarshal(body, &response_json)
+				clusters_response_json = &ClustersResponse{}
+				json_err = json.Unmarshal(body, &clusters_response_json)
 			})
 			It("Should return a 200", func() {
 				Expect(resp.StatusCode).To(Equal(http.StatusOK))
@@ -486,15 +490,15 @@ var _ = Describe("Cluster", func() {
 				Expect(json_err).NotTo(HaveOccurred())
 			})
 			It("Should return a request uuid", func() {
-				id, err := uuid.Parse(response_json.RequestId)
+				id, err := uuid.Parse(clusters_response_json.RequestId)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(id).NotTo(BeNil())
 			})
 			It("Should return clusters", func() {
-				Expect(response_json.Data.Type).To(Equal("clusters"))
+				Expect(clusters_response_json.Data.Type).To(Equal("clusters"))
 			})
 			It("Should return no clusters", func() {
-				cr := response_json.Data.Attributes.([]interface{})
+				cr := clusters_response_json.Data.Attributes
 				Expect(cr).To(BeEmpty())
 			})
 		})
@@ -521,8 +525,8 @@ var _ = Describe("Cluster", func() {
 				body, err = ioutil.ReadAll(resp.Body)
 				Expect(err).NotTo(HaveOccurred())
 
-				response_json = &RequestResponse{}
-				json_err = json.Unmarshal(body, &response_json)
+				error_response_json = &ErrorResponse{}
+				json_err = json.Unmarshal(body, &error_response_json)
 			})
 			It("Should return a 500", func() {
 				Expect(resp.StatusCode).To(Equal(http.StatusInternalServerError))
@@ -531,12 +535,12 @@ var _ = Describe("Cluster", func() {
 				Expect(json_err).NotTo(HaveOccurred())
 			})
 			It("Should return a request uuid", func() {
-				id, err := uuid.Parse(response_json.RequestId)
+				id, err := uuid.Parse(error_response_json.RequestId)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(id).NotTo(BeNil())
 			})
 			It("Should return an error", func() {
-				Expect(response_json.Data.Type).To(Equal("error"))
+				Expect(error_response_json.Data.Type).To(Equal("error"))
 			})
 		})
 
@@ -575,8 +579,8 @@ var _ = Describe("Cluster", func() {
 			body, err = ioutil.ReadAll(resp.Body)
 			Expect(err).NotTo(HaveOccurred())
 
-			response_json = &RequestResponse{}
-			json_err = json.Unmarshal(body, &response_json)
+			cluster_response_json = &ClusterResponse{}
+			json_err = json.Unmarshal(body, &cluster_response_json)
 		})
 		It("Should return a 202", func() {
 			Expect(resp.StatusCode).To(Equal(http.StatusAccepted))
@@ -585,16 +589,16 @@ var _ = Describe("Cluster", func() {
 			Expect(json_err).NotTo(HaveOccurred())
 		})
 		It("Should return a request uuid", func() {
-			id, err := uuid.Parse(response_json.RequestId)
+			id, err := uuid.Parse(cluster_response_json.RequestId)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(id).NotTo(BeNil())
 		})
 		It("Should return a cluster", func() {
-			Expect(response_json.Data.Type).To(Equal("cluster"))
+			Expect(cluster_response_json.Data.Type).To(Equal("cluster"))
 		})
 		It("Should return the expected cluster", func() {
-			cr := response_json.Data.Attributes.(map[string]interface{})
-			Expect(cr["id"]).To(Equal(cluster1.Id))
+			cr := cluster_response_json.Data.Attributes
+			Expect(cr.Id).To(Equal(cluster1.Id))
 		})
 	})
 
@@ -622,8 +626,8 @@ var _ = Describe("Cluster", func() {
 			body, err = ioutil.ReadAll(resp.Body)
 			Expect(err).NotTo(HaveOccurred())
 
-			response_json = &RequestResponse{}
-			json_err = json.Unmarshal(body, &response_json)
+			error_response_json = &ErrorResponse{}
+			json_err = json.Unmarshal(body, &error_response_json)
 		})
 		It("Should return a 500", func() {
 			Expect(resp.StatusCode).To(Equal(http.StatusInternalServerError))
@@ -632,12 +636,12 @@ var _ = Describe("Cluster", func() {
 			Expect(json_err).NotTo(HaveOccurred())
 		})
 		It("Should return a request uuid", func() {
-			id, err := uuid.Parse(response_json.RequestId)
+			id, err := uuid.Parse(error_response_json.RequestId)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(id).NotTo(BeNil())
 		})
 		It("Should return a error", func() {
-			Expect(response_json.Data.Type).To(Equal("error"))
+			Expect(error_response_json.Data.Type).To(Equal("error"))
 		})
 	})
 
@@ -665,8 +669,8 @@ var _ = Describe("Cluster", func() {
 			body, err = ioutil.ReadAll(resp.Body)
 			Expect(err).NotTo(HaveOccurred())
 
-			response_json = &RequestResponse{}
-			json_err = json.Unmarshal(body, &response_json)
+			error_response_json = &ErrorResponse{}
+			json_err = json.Unmarshal(body, &error_response_json)
 		})
 		It("Should return a 404", func() {
 			Expect(resp.StatusCode).To(Equal(http.StatusNotFound))
@@ -675,12 +679,12 @@ var _ = Describe("Cluster", func() {
 			Expect(json_err).NotTo(HaveOccurred())
 		})
 		It("Should return a request uuid", func() {
-			id, err := uuid.Parse(response_json.RequestId)
+			id, err := uuid.Parse(error_response_json.RequestId)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(id).NotTo(BeNil())
 		})
 		It("Should return a error", func() {
-			Expect(response_json.Data.Type).To(Equal("error"))
+			Expect(error_response_json.Data.Type).To(Equal("error"))
 		})
 	})
 
@@ -707,8 +711,8 @@ var _ = Describe("Cluster", func() {
 			body, err = ioutil.ReadAll(resp.Body)
 			Expect(err).NotTo(HaveOccurred())
 
-			response_json = &RequestResponse{}
-			json_err = json.Unmarshal(body, &response_json)
+			error_response_json = &ErrorResponse{}
+			json_err = json.Unmarshal(body, &error_response_json)
 		})
 		It("Should return a 400", func() {
 			Expect(resp.StatusCode).To(Equal(http.StatusBadRequest))
@@ -717,12 +721,12 @@ var _ = Describe("Cluster", func() {
 			Expect(json_err).NotTo(HaveOccurred())
 		})
 		It("Should return a request uuid", func() {
-			id, err := uuid.Parse(response_json.RequestId)
+			id, err := uuid.Parse(error_response_json.RequestId)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(id).NotTo(BeNil())
 		})
 		It("Should return a error", func() {
-			Expect(response_json.Data.Type).To(Equal("error"))
+			Expect(error_response_json.Data.Type).To(Equal("error"))
 		})
 	})
 
@@ -774,7 +778,10 @@ func NewValidClusterService() *ValidClusterService {
 }
 
 func (cs *ValidClusterService) CreateCluster(rc app.RequestContext) (*models.Cluster, error) {
-	return &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}, nil
+	var outputsBlob = []byte(`[{"name":"foobar","sensitive":"true","type":"foo","value":"bar"},{"name":"barfoo","sensitive":"false","type":"bar","value":"foo"}]`)
+
+	cluster1 := &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status", Outputs: outputsBlob}
+	return cluster1, nil
 }
 
 func (cs *ValidClusterService) GetCluster(rc app.RequestContext, id string) (*models.Cluster, error) {

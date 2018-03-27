@@ -1,6 +1,8 @@
 package daos_test
 
 import (
+	"encoding/json"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
@@ -24,6 +26,7 @@ var (
 				name 							text,
 				status 						text,
 				message 					text,
+				outputs 					text,
 				terraform_state 	text,
 				terraform_config 	json
 		)`
@@ -37,6 +40,12 @@ var _ = BeforeSuite(func() {
 
 	err := app.LoadServerConfig(&config, "../")
 	Expect(err).NotTo(HaveOccurred())
+
+	// A closed database connection approximates a non-useable
+	// database connection
+	InvalidDB, err = sqlx.Connect("postgres", config.ConnStr)
+	Expect(err).NotTo(HaveOccurred())
+	InvalidDB.Close()
 
 	db, err = sqlx.Connect("postgres", config.ConnStr)
 	Expect(err).NotTo(HaveOccurred())
@@ -77,9 +86,19 @@ var _ = Describe("Cluster", func() {
 		tx, err = db.Beginx()
 		Expect(err).NotTo(HaveOccurred())
 
-		cluster1 = &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster_1", Status: "provisioned", Message: "", TerraformState: nil}
-		cluster2 = &models.Cluster{Id: "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster_2", Status: "provisioned", Message: "", TerraformState: nil}
-		notacluster = &models.Cluster{Id: "a19e1bfe-0ec5-11ea-ba89-0ed0f89f718b", Name: "notacluster", Status: "nothere", Message: "", TerraformState: nil}
+		outputs := map[string]models.Output{
+			"foobar": models.Output{
+				Sensitive: "true",
+				Type:      "foo",
+				Value:     "bar",
+			},
+		}
+		js, err := json.Marshal(outputs)
+		Expect(err).NotTo(HaveOccurred())
+
+		cluster1 = &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster_1", Status: "provisioned", Message: "", TerraformState: nil, Outputs: js}
+		cluster2 = &models.Cluster{Id: "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster_2", Status: "provisioned", Message: "", TerraformState: nil, Outputs: js}
+		notacluster = &models.Cluster{Id: "a19e1bfe-0ec5-11ea-ba89-0ed0f89f718b", Name: "notacluster", Status: "nothere", Message: "", TerraformState: nil, Outputs: nil}
 		terraformConfig = []byte(`{"provider":{"google":{}}}`)
 	})
 
@@ -101,7 +120,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				cluster, err = dao.CreateCluster(db, terraformConfig, "")
+				cluster, err = dao.CreateCluster(db, terraformConfig, requestId)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -118,11 +137,26 @@ var _ = Describe("Cluster", func() {
 			It("Should have written the config in the config field", func() {
 				Expect(cluster.TerraformConfig).To(Equal(terraformConfig))
 			})
+			It("Should use the request id for the cluster id", func() {
+				Expect(cluster.Id).To(Equal(requestId))
+			})
 		})
 
 		Context("Without terraform configuration", func() {
 			BeforeEach(func() {
 				cluster, err = dao.CreateCluster(db, nil, requestId)
+			})
+			It("Should error", func() {
+				Expect(err).To(HaveOccurred())
+			})
+			It("Should not return a cluster", func() {
+				Expect(cluster).To(BeNil())
+			})
+		})
+
+		Context("Without a request id", func() {
+			BeforeEach(func() {
+				cluster, err = dao.CreateCluster(db, terraformConfig, "")
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -160,7 +194,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				db.MustExec("INSERT INTO clusters (id,name,status,message,terraform_state) VALUES ($1,$2,$3,$4,$5)", cluster1.Id, cluster1.Name, cluster1.Status, cluster1.Message, cluster1.TerraformState)
+				db.MustExec("INSERT INTO clusters (id,name,status,message,outputs,terraform_state) VALUES ($1,$2,$3,$4,$5,$6)", cluster1.Id, cluster1.Name, cluster1.Status, cluster1.Message, cluster1.Outputs, cluster1.TerraformState)
 				cluster, err = dao.GetCluster(db, cluster1.Id, requestId)
 			})
 			It("Should not error", func() {
@@ -187,7 +221,7 @@ var _ = Describe("Cluster", func() {
 			})
 		})
 
-		Context("When an id was not specified", func() {
+		Context("When a clusterId was not specified", func() {
 			BeforeEach(func() {
 				cluster, err = dao.GetCluster(db, "", requestId)
 			})
@@ -196,6 +230,30 @@ var _ = Describe("Cluster", func() {
 			})
 			It("Should not return a cluster", func() {
 				Expect(cluster).Should(BeNil())
+			})
+		})
+
+		Context("When a requestId was not specified", func() {
+			BeforeEach(func() {
+				cluster, err = dao.GetCluster(db, cluster1.Id, "")
+			})
+			It("should error", func() {
+				Expect(err).Should(HaveOccurred())
+			})
+			It("Should not return a cluster", func() {
+				Expect(cluster).Should(BeNil())
+			})
+		})
+
+		Context("When then database transaction cannot be created", func() {
+			BeforeEach(func() {
+				cluster, err = dao.GetCluster(InvalidDB, cluster1.Id, requestId)
+			})
+			It("Should error", func() {
+				Expect(err).To(HaveOccurred())
+			})
+			It("Should not return a cluster", func() {
+				Expect(cluster).To(BeNil())
 			})
 		})
 
