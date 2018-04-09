@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/jmoiron/sqlx"
 	"github.com/kmacoskey/taos/app"
 	"github.com/kmacoskey/taos/models"
@@ -16,7 +15,7 @@ type clusterDao interface {
 	GetCluster(db *sqlx.DB, id string, requestId string) (*models.Cluster, error)
 	GetClusters(db *sqlx.DB, requestId string) ([]models.Cluster, error)
 	CreateCluster(db *sqlx.DB, config []byte, requestId string) (*models.Cluster, error)
-	UpdateCluster(db *sqlx.DB, cluster *models.Cluster, requestId string) (*models.Cluster, error)
+	UpdateClusterField(db *sqlx.DB, id string, field string, value interface{}, requestId string) error
 	DeleteCluster(db *sqlx.DB, id string, requestId string) (*models.Cluster, error)
 }
 
@@ -114,21 +113,19 @@ func (s *ClusterService) DeleteCluster(context app.RequestContext, id string) (*
 	logger.Info(fmt.Sprintf("cluster '%s' destruction begin", id))
 
 	cluster.Status = models.ClusterStatusDestroying
-	cluster_to_destroy, err := s.dao.UpdateCluster(s.db, cluster, context.RequestId())
+	err = s.dao.UpdateClusterField(s.db, cluster.Id, "status", models.ClusterStatusDestroying, context.RequestId())
 	if err != nil {
 		logger.Error(err.Error())
 		logger.Error("failed to destroy cluster")
-		return cluster_to_destroy, err
+		return cluster, err
 	}
 
-	logger.Debug(spew.Sdump(cluster_to_destroy))
-
 	// After setting cluster status in the database, begin the destruction
-	go s.TerraformDestroyCluster(cluster_to_destroy, context.RequestId())
+	go s.TerraformDestroyCluster(cluster, context.RequestId())
 
 	//  Cluster is returned and then eventual cluster status
 	//  is handled in the go thread
-	return cluster_to_destroy, nil
+	return cluster, nil
 }
 
 func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster, requestId string) {
@@ -154,7 +151,7 @@ func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster, requestId st
 	if err != nil {
 		c.Status = models.ClusterStatusDestroyFailed
 		logger.Error(err.Error())
-		_, err := s.dao.UpdateCluster(s.db, c, requestId)
+		err := s.dao.UpdateClusterField(s.db, c.Id, "status", models.ClusterStatusDestroyFailed, requestId)
 		if err != nil {
 			logger.Error(err.Error())
 		}
@@ -166,7 +163,7 @@ func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster, requestId st
 		c.Status = models.ClusterStatusDestroyFailed
 		c.Message = err.Error()
 		logger.Error(err.Error())
-		_, err := s.dao.UpdateCluster(s.db, c, requestId)
+		err := s.dao.UpdateClusterField(s.db, c.Id, "status", models.ClusterStatusDestroyFailed, requestId)
 		if err != nil {
 			logger.Error(err.Error())
 		}
@@ -178,7 +175,7 @@ func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster, requestId st
 		c.Status = models.ClusterStatusDestroyFailed
 		c.Message = err.Error()
 		logger.Error(err.Error())
-		_, err := s.dao.UpdateCluster(s.db, c, requestId)
+		err := s.dao.UpdateClusterField(s.db, c.Id, "status", models.ClusterStatusDestroyFailed, requestId)
 		if err != nil {
 			logger.Error(err.Error())
 		}
@@ -192,7 +189,7 @@ func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster, requestId st
 		c.Status = "destroyed"
 		c.Message = output
 		c.TerraformState = state
-		_, err := s.dao.UpdateCluster(s.db, c, requestId)
+		err := s.dao.UpdateClusterField(s.db, c.Id, "status", "destroyed", requestId)
 		if err != nil {
 			logger.Error(err.Error())
 			logger.Error("cluster destroying failed")
@@ -221,7 +218,7 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 	logger.Info("provisioning cluster")
 
 	c.Status = "provisioning"
-	_, err := s.dao.UpdateCluster(s.db, c, requestId)
+	err := s.dao.UpdateClusterField(s.db, c.Id, "status", "provisioning", requestId)
 	if err != nil {
 		logger.Error(err.Error())
 		logger.Error("failed to update cluster during provisionining")
@@ -232,7 +229,7 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 		c.Status = "provision_failed"
 		logger.Error(err.Error())
 		logger.Error("cluster provisioning failed during clientinit")
-		_, err := s.dao.UpdateCluster(s.db, c, requestId)
+		err := s.dao.UpdateClusterField(s.db, c.Id, "status", "provision_failed", requestId)
 		if err != nil {
 			logger.Error(err.Error())
 			logger.Error("failed to update cluster during provision failure")
@@ -246,7 +243,12 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 		c.Message = err.Error()
 		logger.Error(err.Error())
 		logger.Error("cluster provisioning failed during terraform apply")
-		_, err := s.dao.UpdateCluster(s.db, c, requestId)
+		err := s.dao.UpdateClusterField(s.db, c.Id, "status", c.Status, requestId)
+		if err != nil {
+			logger.Error(err.Error())
+			logger.Error("failed to update cluster during provision failure")
+		}
+		err = s.dao.UpdateClusterField(s.db, c.Id, "message", c.Message, requestId)
 		if err != nil {
 			logger.Error(err.Error())
 			logger.Error("failed to update cluster during provision failure")
@@ -264,10 +266,15 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 		c.Message = err.Error()
 		logger.Error(err.Error())
 		logger.Error("cluster provisioning failed during terraform output")
-		_, err := s.dao.UpdateCluster(s.db, c, requestId)
+		err := s.dao.UpdateClusterField(s.db, c.Id, "status", c.Status, requestId)
 		if err != nil {
 			logger.Error(err.Error())
 			logger.Error("failed to update cluster during terraform output")
+		}
+		err = s.dao.UpdateClusterField(s.db, c.Id, "message", c.Message, requestId)
+		if err != nil {
+			logger.Error(err.Error())
+			logger.Error("failed to update cluster during provision failure")
 		}
 		return
 	}
@@ -278,7 +285,12 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 		c.Message = err.Error()
 		logger.Error(err.Error())
 		logger.Error("cluster provisioning failed during client cleanup")
-		_, err := s.dao.UpdateCluster(s.db, c, requestId)
+		err := s.dao.UpdateClusterField(s.db, c.Id, "status", c.Status, requestId)
+		if err != nil {
+			logger.Error(err.Error())
+			logger.Error("failed to update cluster during terraform output")
+		}
+		err = s.dao.UpdateClusterField(s.db, c.Id, "message", c.Message, requestId)
 		if err != nil {
 			logger.Error(err.Error())
 			logger.Error("failed to update cluster during provision failure")
@@ -291,10 +303,15 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 		c.Message = stdout
 		c.Outputs = outputs
 		c.TerraformState = state
-		_, err := s.dao.UpdateCluster(s.db, c, requestId)
+		err := s.dao.UpdateClusterField(s.db, c.Id, "status", c.Status, requestId)
 		if err != nil {
 			logger.Error(err.Error())
-			logger.Error("failed to update cluster during provisionining")
+			logger.Error("failed to update cluster during terraform output")
+		}
+		err = s.dao.UpdateClusterField(s.db, c.Id, "message", c.Message, requestId)
+		if err != nil {
+			logger.Error(err.Error())
+			logger.Error("failed to update cluster during provision failure")
 		}
 		return
 	}

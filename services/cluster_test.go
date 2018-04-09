@@ -83,7 +83,7 @@ var _ = Describe("Cluster", func() {
 			It("Should return a cluster", func() {
 				Expect(cluster).NotTo(BeNil())
 			})
-			It("Should eventually be provisioned", func() {
+			FIt("Should eventually be provisioned", func() {
 				Eventually(func() string {
 					c, err := cs.GetCluster(rc, cluster.Id)
 					Expect(err).NotTo(HaveOccurred())
@@ -398,9 +398,23 @@ func (dao *ValidClusterDao) CreateCluster(db *sqlx.DB, config []byte, requestId 
 	return dao.clustersMap[uuid], nil
 }
 
-func (dao *ValidClusterDao) UpdateCluster(db *sqlx.DB, cluster *models.Cluster, requestId string) (*models.Cluster, error) {
-	dao.clustersMap[cluster.Id] = cluster
-	return dao.clustersMap[cluster.Id], nil
+func (dao *ValidClusterDao) UpdateClusterField(db *sqlx.DB, id string, field string, value interface{}, requestId string) error {
+	cluster := &models.Cluster{}
+	cluster = dao.clustersMap[id]
+	switch field {
+	case "status":
+		cluster.Status = value.(string)
+	case "message":
+		cluster.Message = value.(string)
+	case "outputs":
+		cluster.Outputs = value.([]byte)
+	case "terraform_config":
+		cluster.TerraformConfig = value.([]byte)
+	case "terraform_state":
+		cluster.TerraformState = value.([]byte)
+	}
+	dao.clustersMap[id] = cluster
+	return nil
 }
 
 func (dao *ValidClusterDao) GetCluster(db *sqlx.DB, id string, requestId string) (*models.Cluster, error) {
@@ -436,8 +450,8 @@ func (dao *EmptyClusterDao) CreateCluster(db *sqlx.DB, config []byte, requestId 
 	return nil, errors.New("foo")
 }
 
-func (dao *EmptyClusterDao) UpdateCluster(db *sqlx.DB, cluster *models.Cluster, requestId string) (*models.Cluster, error) {
-	return cluster, nil
+func (dao *EmptyClusterDao) UpdateClusterField(db *sqlx.DB, id string, field string, value interface{}, requestId string) error {
+	return nil
 }
 
 func (dao *EmptyClusterDao) GetCluster(db *sqlx.DB, id string, requestId string) (*models.Cluster, error) {

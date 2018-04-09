@@ -3,7 +3,6 @@ package daos
 import (
 	"errors"
 	"fmt"
-	"regexp"
 
 	sillyname "github.com/Pallinder/sillyname-go"
 	"github.com/jmoiron/sqlx"
@@ -12,14 +11,6 @@ import (
 )
 
 type ClusterDao struct{}
-
-var (
-	noRelation *regexp.Regexp
-)
-
-func init() {
-	noRelation, _ = regexp.Compile(`pq: relation ".*" does not exist`)
-}
 
 func NewClusterDao() *ClusterDao {
 	return &ClusterDao{}
@@ -46,9 +37,8 @@ func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, requestId strin
 		return nil, err
 	}
 
-	_, err = tx.NamedQuery(`
-		INSERT INTO clusters (id,name,status,terraform_config) 
-		VALUES (:id,:name,:status,:terraform_config) `, cluster)
+	sql := `INSERT INTO clusters (id,name,status,terraform_config) VALUES (:id,:name,:status,:terraform_config) `
+	_, err = tx.NamedQuery(sql, cluster)
 	if err != nil {
 		tx.Rollback()
 		logger.Error(err.Error())
@@ -61,7 +51,7 @@ func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, requestId strin
 	return &cluster, nil
 }
 
-func (dao *ClusterDao) GetCluster(db *sqlx.DB, clusterId string, requestId string) (*models.Cluster, error) {
+func (dao *ClusterDao) GetCluster(db *sqlx.DB, id string, requestId string) (*models.Cluster, error) {
 	logger := log.WithFields(log.Fields{"package": "daos", "event": "get_cluster", "request": requestId})
 
 	cluster := models.Cluster{}
@@ -69,9 +59,11 @@ func (dao *ClusterDao) GetCluster(db *sqlx.DB, clusterId string, requestId strin
 	if len(requestId) == 0 {
 		logger.Error("cannot get cluster without requestId")
 		return nil, errors.New("cannot get cluster without requestId")
-	} else if len(clusterId) == 0 {
-		logger.Error("cannot get cluster without clusterId")
-		return nil, errors.New("cannot get cluster without clusterId")
+	}
+
+	if len(id) == 0 {
+		logger.Error("cannot get cluster without id")
+		return nil, errors.New("cannot get cluster without id")
 	}
 
 	tx, err := db.Beginx()
@@ -80,7 +72,8 @@ func (dao *ClusterDao) GetCluster(db *sqlx.DB, clusterId string, requestId strin
 		return nil, err
 	}
 
-	err = tx.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", clusterId)
+	sql := `SELECT * FROM clusters WHERE id=$1`
+	err = tx.Get(&cluster, sql, id)
 	if err != nil {
 		tx.Rollback()
 		logger.Error(err.Error())
@@ -89,163 +82,101 @@ func (dao *ClusterDao) GetCluster(db *sqlx.DB, clusterId string, requestId strin
 
 	tx.Commit()
 
-	logger.Info(fmt.Sprintf("cluster '%s' retrieved", clusterId))
+	logger.Info(fmt.Sprintf("cluster '%s' retrieved", id))
 
 	return &cluster, nil
 }
 
-func (dao *ClusterDao) UpdateCluster(db *sqlx.DB, cluster *models.Cluster, requestId string) (*models.Cluster, error) {
-	logger := log.WithFields(log.Fields{
-		"topic":   "taos",
-		"package": "daos",
-		"event":   "update_cluster",
-		"request": requestId,
-	})
+func (dao *ClusterDao) GetClusters(db *sqlx.DB, requestId string) ([]models.Cluster, error) {
+	logger := log.WithFields(log.Fields{"package": "daos", "event": "get_clusters", "request": requestId})
 
-	logger.Info("updating cluster")
-
-	updated_cluster := models.Cluster{}
+	if len(requestId) == 0 {
+		logger.Error("cannot get cluster without requestId")
+		return nil, errors.New("cannot get cluster without requestId")
+	}
 
 	tx, err := db.Beginx()
 	if err != nil {
 		logger.Error(err.Error())
 		return nil, err
 	}
-	logger.Debug("transaction created")
 
-	logger.Debug(fmt.Sprintf("UPDATE clusters SET status = '%s', message = '%s', terraform_state = '%s', outputs = '%s' WHERE id = '%s' RETURNING *", cluster.Status, cluster.Message, cluster.TerraformState, cluster.Outputs, cluster.Id))
-	rows, err := tx.Queryx(`UPDATE clusters SET status = $1, message = $2, terraform_state = $3, outputs = $4 WHERE id = $5 RETURNING *`, &cluster.Status, &cluster.Message, &cluster.TerraformState, &cluster.Outputs, &cluster.Id)
+	sql := `SELECT * FROM clusters`
+	rows, err := tx.Queryx(sql)
 	if err != nil {
 		tx.Rollback()
-		logger.Debug("transaction rolledback")
 		logger.Error(err.Error())
-		logger.Error("failed to update cluster")
 		return nil, err
 	}
 	defer rows.Close()
-
-	if rows.Next() {
-		err := rows.StructScan(&updated_cluster)
-		if err != nil {
-			tx.Rollback()
-			logger.Debug("transaction rolledback")
-			logger.Error(err.Error())
-			logger.Error("failed to update cluster")
-			return nil, err
-		}
-	} else {
-		tx.Rollback()
-		logger.Debug("transaction rolledback")
-		logger.Error("no clusters updated")
-		return nil, errors.New("no clusters updated")
-	}
-
-	tx.Commit()
-	logger.Debug("transaction commited")
-	// logger.Debug(updated_cluster)
-
-	logger.Info(fmt.Sprintf("cluster '%s' status '%s'", updated_cluster.Id, updated_cluster.Status))
-
-	return &updated_cluster, nil
-}
-
-func (dao *ClusterDao) GetClusters(db *sqlx.DB, requestId string) ([]models.Cluster, error) {
-	logger := log.WithFields(log.Fields{
-		"topic":   "taos",
-		"package": "daos",
-		"event":   "get_clusters",
-		"request": requestId,
-	})
 
 	clusters := []models.Cluster{}
 	cluster := models.Cluster{}
 
-	tx, err := db.Beginx()
-	if err != nil {
-		logger.Error(err.Error())
-		return nil, err
-	}
-	logger.Debug("transaction created")
-
-	logger.Debug("SELECT * FROM clusters")
-	rows, err := tx.Queryx("SELECT * FROM clusters")
-	if err == nil {
-		for rows.Next() {
-			err := rows.StructScan(&cluster)
-			if err != nil {
-				logger.Error(err)
-			}
-			clusters = append(clusters, cluster)
-		}
-	} else {
-		tx.Rollback()
-		logger.Debug("transaction rolledback")
-		switch {
-		case noRelation.MatchString(err.Error()):
-			logger.Error(err.Error())
-			return nil, err
-			logger.Error("could not retrieve clusters")
-		default:
-			logger.Debug(err.Error())
-			logger.Error("could not retrieve clusters")
+	for rows.Next() {
+		err := rows.StructScan(&cluster)
+		if err != nil {
+			logger.Error(err)
 			return nil, err
 		}
+		clusters = append(clusters, cluster)
 	}
 
 	tx.Commit()
-	logger.Debug("transaction commited")
+
+	logger.Info(fmt.Sprintf("'%s' cluster retrieved", len(clusters)))
+
 	return clusters, nil
 }
 
-func (dao *ClusterDao) DeleteCluster(db *sqlx.DB, id string, requestId string) (*models.Cluster, error) {
-	logger := log.WithFields(log.Fields{
-		"topic":   "taos",
-		"package": "daos",
-		"event":   "delete_clusters",
-		"request": requestId,
-	})
-
-	logger.Info("deleting cluster")
-
-	updated_cluster := models.Cluster{}
+func (dao *ClusterDao) UpdateClusterField(db *sqlx.DB, id string, field string, value interface{}, requestId string) error {
+	logger := log.WithFields(log.Fields{"package": "daos", "event": "update_cluster_status", "request": requestId})
 
 	tx, err := db.Beginx()
 	if err != nil {
 		logger.Error(err.Error())
-		return nil, err
+		return err
 	}
-	logger.Debug("transaction created")
 
-	logger.Debug(fmt.Sprintf("UPDATE clusters SET status = '%s' WHERE id = '%s' AND status NOT IN ('destroyed') RETURNING *", models.ClusterStatusDestroying, id))
-	rows, err := tx.Queryx(`UPDATE clusters SET status = $1 WHERE id = $2 AND status NOT IN ('destroyed') RETURNING *`, models.ClusterStatusDestroying, id)
+	sql := ``
+	switch field {
+	case "status":
+		sql = `UPDATE clusters SET status = $2 WHERE id = $1 `
+	case "message":
+		sql = `UPDATE clusters SET message = $2 WHERE id = $1 `
+	case "outputs":
+		sql = `UPDATE clusters SET outputs = $2 WHERE id = $1 `
+	case "terraform_config":
+		sql = `UPDATE clusters SET terraform_config = $2 WHERE id = $1 `
+	case "terraform_state":
+		sql = `UPDATE clusters SET terraform_state = $2 WHERE id = $1 `
+	default:
+		tx.Rollback()
+		return errors.New(fmt.Sprintf("field '%s' does not exist", field))
+	}
+
+	result, err := tx.Exec(sql, id, value)
 	if err != nil {
 		tx.Rollback()
-		logger.Debug("transaction rolledback")
 		logger.Error(err.Error())
-		logger.Error(fmt.Sprintf("could not update cluster status to '%s'", models.ClusterStatusDestroying))
-		return nil, err
+		return err
 	}
-	defer rows.Close()
 
-	if rows.Next() {
-		err := rows.StructScan(&updated_cluster)
-		if err != nil {
-			tx.Rollback()
-			logger.Error("transaction rolledback")
-			logger.Error(err.Error())
-			logger.Error("no clusters destroyed")
-			return nil, err
-		}
-	} else {
+	rows, err := result.RowsAffected()
+	if err != nil {
 		tx.Rollback()
-		logger.Debug("transaction rolledback")
-		logger.Debug("no clusters destroyed")
-		return nil, errors.New("no clusters destroyed")
+		logger.Error(err.Error())
+		return err
+	}
+
+	if rows == 0 {
+		tx.Rollback()
+		return errors.New("no clusters updated")
 	}
 
 	tx.Commit()
-	logger.Debug("transaction commited")
-	// logger.Debug(updated_cluster)
 
-	return &updated_cluster, nil
+	logger.Info(fmt.Sprintf("'%s':'%s':'%s'", id, field, value))
+
+	return nil
 }
