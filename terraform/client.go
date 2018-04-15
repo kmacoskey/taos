@@ -1,7 +1,6 @@
 package terraform
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,65 +9,56 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strings"
 
 	"github.com/davecgh/go-spew/spew"
 	log "github.com/sirupsen/logrus"
 )
 
-type Client struct {
-	Terraform *Terraform
+type TerraformClient interface {
+	TerraformCmd(args []string) *exec.Cmd
+	ClientInit() error
+	ClientDestroy() error
+	Init() (string, error)
+	Plan() (string, error)
+	Apply() ([]byte, string, error)
+	Destroy() ([]byte, string, error)
+	Outputs() ([]byte, error)
 }
 
-func (c Client) Version() (string, error) {
-	outputCmd := c.terraformCmd([]string{
+type Client struct {
+	Terraform TerraformInfra
+	Command   TerraformCommandRunner
+}
+
+func NewTerraformClient() *Client {
+	return &Client{
+		Terraform: TerraformInfra{},
+		Command:   TerraformCommand{},
+	}
+}
+
+func (client *Client) Version() (string, error) {
+	err, stdout, stderr := client.Command.Run("", []string{
 		"-v",
 	})
 
-	output, err := outputCmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("Failed to retrieve version.\nError: %s\nOutput: %s", err, output)
+		return "", fmt.Errorf("Failed to retrieve version.\nError: %s\nOutput: %s", err, stderr)
 	}
 
 	// The version returned could have many lines
 	// We only care about the first line
 	re := regexp.MustCompile(`\A.*`)
-	matches := re.FindStringSubmatch(string(output))
+	matches := re.FindStringSubmatch(stdout)
 
 	return matches[0], nil
-}
-
-func (c Client) terraformCmd(args []string) *exec.Cmd {
-	logger := log.WithFields(log.Fields{
-		"topic":   "taos",
-		"package": "terraform",
-		"event":   "run_command",
-	})
-
-	defaultArgs := []string{
-		"-no-color",
-	}
-
-	cmd := exec.Command("/bin/sh", "-c", fmt.Sprintf("terraform %s %s", strings.Join(args, " "), strings.Join(defaultArgs, " ")))
-
-	logger.Debug(cmd)
-
-	cmd.Env = []string{
-		fmt.Sprintf("PATH=%s", os.Getenv("PATH")),
-		fmt.Sprintf("HOME=%s", os.Getenv("HOME")),
-		fmt.Sprintf("GOOGLE_APPLICATION_CREDENTIALS=%s", os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")),
-		"CHECKPOINT_DISABLE=1",
-		// "TF_LOG=DEBUG",
-	}
-
-	return cmd
 }
 
 // If client Config content is provided, then
 //  create the necessary paths and files to
 //  allow for terraform commands.
 // Nothing is done if the Config content is empty
-func (c Client) ClientInit() error {
+func (client *Client) ClientInit() error {
 	logger := log.WithFields(log.Fields{
 		"topic":   "taos",
 		"package": "terraform",
@@ -77,7 +67,7 @@ func (c Client) ClientInit() error {
 
 	logger.Debug("initalizing terraform client")
 
-	if len(c.Terraform.Config) <= 0 {
+	if len(client.Terraform.Config) <= 0 {
 		return fmt.Errorf(ErrorMissingConfig)
 	}
 
@@ -86,51 +76,51 @@ func (c Client) ClientInit() error {
 	if err != nil {
 		return err
 	}
-	c.Terraform.WorkingDir = wd
+	client.Terraform.WorkingDir = wd
 
 	// Set a name for the plan file
-	c.Terraform.PlanFileName = "terraform.plan"
+	client.Terraform.PlanFileName = "terraform.plan"
 
 	// Set a name for the config file
-	c.Terraform.ConfigFileName = "terraform.tf"
+	client.Terraform.ConfigFileName = "terraform.tf"
 
 	// Set a name for the state file
-	c.Terraform.StateFileName = "terraform.tfstate"
+	client.Terraform.StateFileName = "terraform.tfstate"
 
 	// Write Config content to config file only if there is content to write
-	if len(c.Terraform.Config) > 0 {
-		configfile := filepath.Join(c.Terraform.WorkingDir, c.Terraform.ConfigFileName)
-		err = ioutil.WriteFile(configfile, c.Terraform.Config, 0666)
+	if len(client.Terraform.Config) > 0 {
+		configfile := filepath.Join(client.Terraform.WorkingDir, client.Terraform.ConfigFileName)
+		err = ioutil.WriteFile(configfile, client.Terraform.Config, 0666)
 		if err != nil {
 			return err
 		}
 	}
 
 	// Write State content to state file only if there is content to write
-	if len(c.Terraform.State) > 0 {
-		statefile := filepath.Join(c.Terraform.WorkingDir, c.Terraform.StateFileName)
-		err = ioutil.WriteFile(statefile, c.Terraform.State, 0666)
+	if len(client.Terraform.State) > 0 {
+		statefile := filepath.Join(client.Terraform.WorkingDir, client.Terraform.StateFileName)
+		err = ioutil.WriteFile(statefile, client.Terraform.State, 0666)
 		if err != nil {
 			return err
 		}
 	}
 
-	logger.Debug(spew.Sdump(c.Terraform))
+	logger.Debug(spew.Sdump(client.Terraform))
 
 	return nil
 }
 
-func (c Client) ClientDestroy() error {
-	_, err := os.Stat(c.Terraform.WorkingDir)
+func (client *Client) ClientDestroy() error {
+	_, err := os.Stat(client.Terraform.WorkingDir)
 	if os.IsNotExist(err) {
 		return errors.New(ErrorClientDestroyNoDir)
 	}
 
-	return os.RemoveAll(c.Terraform.WorkingDir)
+	return os.RemoveAll(client.Terraform.WorkingDir)
 }
 
-func (c Client) Init() (string, error) {
-	err := c.ClientInit()
+func (client *Client) Init() (string, error) {
+	err := client.ClientInit()
 	if err != nil {
 		return "", err
 	}
@@ -142,23 +132,15 @@ func (c Client) Init() (string, error) {
 		"-backend=false",
 	}
 
-	initArgs = append(initArgs, c.Terraform.WorkingDir)
-	initCmd := c.terraformCmd(initArgs)
+	initArgs = append(initArgs, client.Terraform.WorkingDir)
+	err, stdout, stderr := client.Command.Run(client.Terraform.WorkingDir, initArgs)
 
-	// Perform terraform actions from within the temporary working directory
-	initCmd.Dir = c.Terraform.WorkingDir
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	initCmd.Stdout = &stdout
-	initCmd.Stderr = &stderr
-	err = initCmd.Run()
 	if err != nil {
-		return "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr.String()))
+		return "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr))
 	}
 
 	re := regexp.MustCompile(`Terraform initialized in an empty directory!`)
-	matches := re.FindStringSubmatch(stdout.String())
+	matches := re.FindStringSubmatch(stdout)
 
 	// This is not the stdout or stderr of the terraform command.
 	// 	Instead, this is expected to be a crafted error message because
@@ -168,11 +150,11 @@ func (c Client) Init() (string, error) {
 		return "", fmt.Errorf("terraform init command failed.\nerror: %s", "Terraform initialized in an empty directory!")
 	}
 
-	return stdout.String(), nil
+	return stdout, nil
 }
 
-func (c Client) Plan() (string, error) {
-	_, err := c.Init()
+func (client *Client) Plan() (string, error) {
+	_, err := client.Init()
 	if err != nil {
 		return "", err
 	}
@@ -182,28 +164,22 @@ func (c Client) Plan() (string, error) {
 		"-input=false", // do not prompt for inputs
 	}
 
-	c.Terraform.PlanFile = filepath.Join(c.Terraform.WorkingDir, c.Terraform.PlanFileName)
+	client.Terraform.PlanFile = filepath.Join(client.Terraform.WorkingDir, client.Terraform.PlanFileName)
 
-	planArgs = append(planArgs, fmt.Sprintf("-out=%s", c.Terraform.PlanFile))
-	planArgs = append(planArgs, c.Terraform.WorkingDir)
+	planArgs = append(planArgs, fmt.Sprintf("-out=%s", client.Terraform.PlanFile))
+	planArgs = append(planArgs, client.Terraform.WorkingDir)
 
-	planCmd := c.terraformCmd(planArgs)
-	planCmd.Dir = c.Terraform.WorkingDir
+	err, stdout, stderr := client.Command.Run(client.Terraform.WorkingDir, planArgs)
 
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	planCmd.Stdout = &stdout
-	planCmd.Stderr = &stderr
-	err = planCmd.Run()
 	if err != nil {
-		return "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr.String()))
+		return "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr))
 	}
 
-	return stdout.String(), nil
+	return stdout, nil
 }
 
-func (c Client) Apply() ([]byte, string, error) {
-	_, err := c.Plan()
+func (client *Client) Apply() ([]byte, string, error) {
+	_, err := client.Plan()
 	if err != nil {
 		return nil, "", err
 	}
@@ -214,32 +190,26 @@ func (c Client) Apply() ([]byte, string, error) {
 		"-input=false", // do not prompt for inputs
 	}
 
-	applyArgs = append(applyArgs, c.Terraform.PlanFile)
+	applyArgs = append(applyArgs, client.Terraform.PlanFile)
 
-	applyCmd := c.terraformCmd(applyArgs)
-	applyCmd.Dir = c.Terraform.WorkingDir
+	err, stdout, stderr := client.Command.Run(client.Terraform.WorkingDir, applyArgs)
 
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	applyCmd.Stdout = &stdout
-	applyCmd.Stderr = &stderr
-	err = applyCmd.Run()
 	if err != nil {
-		return nil, "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr.String()))
+		return nil, "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr))
 	}
 
 	// Read the state file in order to return its contents
-	statefile := filepath.Join(c.Terraform.WorkingDir, c.Terraform.StateFileName)
+	statefile := filepath.Join(client.Terraform.WorkingDir, client.Terraform.StateFileName)
 	state, err := ioutil.ReadFile(statefile)
 	if err != nil {
-		return nil, "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr.String()))
+		return nil, "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr))
 	}
 
-	return state, stdout.String(), nil
+	return state, stdout, nil
 }
 
-func (c Client) Destroy() ([]byte, string, error) {
-	_, err := c.Plan()
+func (client *Client) Destroy() ([]byte, string, error) {
+	_, err := client.Plan()
 	if err != nil {
 		return nil, "", err
 	}
@@ -249,40 +219,34 @@ func (c Client) Destroy() ([]byte, string, error) {
 		"-force",
 	}
 
-	statefile := filepath.Join(c.Terraform.WorkingDir, c.Terraform.StateFileName)
+	statefile := filepath.Join(client.Terraform.WorkingDir, client.Terraform.StateFileName)
 
 	destroyArgs = append(destroyArgs, fmt.Sprintf("-state=%s", statefile))
-	destroyArgs = append(destroyArgs, c.Terraform.WorkingDir)
+	destroyArgs = append(destroyArgs, client.Terraform.WorkingDir)
 
-	destroyCmd := c.terraformCmd(destroyArgs)
-	destroyCmd.Dir = c.Terraform.WorkingDir
+	err, stdout, stderr := client.Command.Run(client.Terraform.WorkingDir, destroyArgs)
 
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	destroyCmd.Stdout = &stdout
-	destroyCmd.Stderr = &stderr
-	err = destroyCmd.Run()
 	if err != nil {
-		return nil, "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr.String()))
+		return nil, "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr))
 	}
 
 	// Read the state file in order to return its contents
 	state, err := ioutil.ReadFile(statefile)
 	if err != nil {
-		return nil, "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr.String()))
+		return nil, "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr))
 	}
 
-	return state, stdout.String(), nil
+	return state, stdout, nil
 }
 
-func (c Client) Outputs() ([]byte, error) {
+func (client *Client) Outputs() ([]byte, error) {
 	logger := log.WithFields(log.Fields{
 		"topic":   "taos",
 		"package": "terraform",
 		"event":   "terraform_outputs",
 	})
 
-	_, err := c.Init()
+	_, err := client.Init()
 	if err != nil {
 		return nil, err
 	}
@@ -292,23 +256,15 @@ func (c Client) Outputs() ([]byte, error) {
 		"-json",
 	}
 
-	statefile := filepath.Join(c.Terraform.WorkingDir, c.Terraform.StateFileName)
+	statefile := filepath.Join(client.Terraform.WorkingDir, client.Terraform.StateFileName)
 
 	outputsArgs = append(outputsArgs, fmt.Sprintf("-state=%s", statefile))
 
-	outputsCmd := c.terraformCmd(outputsArgs)
-	outputsCmd.Dir = c.Terraform.WorkingDir
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	outputsCmd.Stdout = &stdout
-	outputsCmd.Stderr = &stderr
-
-	err = outputsCmd.Run()
+	err, stdout, stderr := client.Command.Run(client.Terraform.WorkingDir, outputsArgs)
 	if err != nil {
 
 		re := regexp.MustCompile(`The state file either has no outputs defined`)
-		matches := re.FindStringSubmatch(stderr.String())
+		matches := re.FindStringSubmatch(stderr)
 
 		// No outputs being defined in the Terraform config is not an error, it's
 		//  more of a warning situation because lacking outputs makes the cluster
@@ -318,13 +274,13 @@ func (c Client) Outputs() ([]byte, error) {
 			logger.Warn("no outputs defined in Terraform config")
 			return nil, nil
 		} else {
-			return nil, errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr.String()))
+			return nil, errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr))
 		}
 	}
 
-	json_outputs, err := json.Marshal(stdout.String())
+	json_outputs, err := json.Marshal(stdout)
 	if err != nil {
-		return nil, errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr.String()))
+		return nil, errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr))
 	}
 
 	return json_outputs, nil
