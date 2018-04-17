@@ -19,6 +19,16 @@ type clusterDao interface {
 	DeleteCluster(db *sqlx.DB, id string, requestId string) (*models.Cluster, error)
 }
 
+type terraformClient interface {
+	ClientInit() error
+	ClientDestroy() error
+	Init() (string, error)
+	Plan() (string, error)
+	Apply() ([]byte, string, error)
+	Destroy() ([]byte, string, error)
+	Outputs() ([]byte, error)
+}
+
 type ClusterService struct {
 	dao clusterDao
 	db  *sqlx.DB
@@ -56,13 +66,8 @@ func (s *ClusterService) GetClusters(context app.RequestContext) ([]models.Clust
 	return clusters, err
 }
 
-func (s *ClusterService) CreateCluster(context app.RequestContext) (*models.Cluster, error) {
-	logger := log.WithFields(log.Fields{
-		"topic":   "taos",
-		"package": "services",
-		"event":   "create_cluster",
-		"request": context.RequestId(),
-	})
+func (s *ClusterService) CreateCluster(context app.RequestContext, client *terraform.Client) (*models.Cluster, error) {
+	logger := log.WithFields(log.Fields{"package": "services", "event": "create_cluster", "request": context.RequestId()})
 
 	logger.Info("creating new cluster")
 
@@ -71,15 +76,14 @@ func (s *ClusterService) CreateCluster(context app.RequestContext) (*models.Clus
 		return cluster, err
 	}
 
-	// After creating new cluster entry in database, begin the provisioning
-	go s.TerraformProvisionCluster(cluster, context.TerraformConfig(), context.RequestId())
+	// Requested cluster is returned and eventual cluster status
+	//  is handled in the terraform service asynchronously
+	go s.TerraformProvisionCluster(client, cluster, context.TerraformConfig(), context.RequestId())
 
-	//  Requested cluster is returned and then eventual cluster status
-	//  is handled in the go thread
 	return cluster, err
 }
 
-func (s *ClusterService) DeleteCluster(context app.RequestContext, id string) (*models.Cluster, error) {
+func (s *ClusterService) DeleteCluster(context app.RequestContext, client *terraform.Client, id string) (*models.Cluster, error) {
 	logger := log.WithFields(log.Fields{
 		"topic":   "taos",
 		"package": "services",
@@ -121,14 +125,14 @@ func (s *ClusterService) DeleteCluster(context app.RequestContext, id string) (*
 	}
 
 	// After setting cluster status in the database, begin the destruction
-	go s.TerraformDestroyCluster(cluster, context.RequestId())
+	go s.TerraformDestroyCluster(client, cluster, context.RequestId())
 
 	//  Cluster is returned and then eventual cluster status
 	//  is handled in the go thread
 	return cluster, nil
 }
 
-func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster, requestId string) {
+func (s *ClusterService) TerraformDestroyCluster(client *terraform.Client, c *models.Cluster, requestId string) {
 	logger := log.WithFields(log.Fields{
 		"topic":   "taos",
 		"package": "services",
@@ -138,16 +142,10 @@ func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster, requestId st
 
 	logger.Info(fmt.Sprintf("terraform destroy cluster '%s'", c.Id))
 
-	t := &terraform.Terraform{
-		Config: c.TerraformConfig,
-		State:  c.TerraformState,
-	}
+	client.Terraform.Config = c.TerraformConfig
+	client.Terraform.State = c.TerraformState
 
-	tc := terraform.Client{
-		Terraform: t,
-	}
-
-	err := tc.ClientInit()
+	err := client.ClientInit()
 	if err != nil {
 		c.Status = models.ClusterStatusDestroyFailed
 		logger.Error(err.Error())
@@ -158,7 +156,7 @@ func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster, requestId st
 		return
 	}
 
-	state, output, err := tc.Destroy()
+	state, output, err := client.Destroy()
 	if err != nil {
 		c.Status = models.ClusterStatusDestroyFailed
 		c.Message = err.Error()
@@ -170,7 +168,7 @@ func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster, requestId st
 		return
 	}
 
-	err = tc.ClientDestroy()
+	err = client.ClientDestroy()
 	if err != nil {
 		c.Status = models.ClusterStatusDestroyFailed
 		c.Message = err.Error()
@@ -199,23 +197,10 @@ func (s *ClusterService) TerraformDestroyCluster(c *models.Cluster, requestId st
 
 }
 
-func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []byte, requestId string) {
-	logger := log.WithFields(log.Fields{
-		"topic":   "taos",
-		"package": "services",
-		"event":   "create_cluster",
-		"request": requestId,
-	})
+func (s *ClusterService) TerraformProvisionCluster(client *terraform.Client, c *models.Cluster, config []byte, requestId string) {
+	logger := log.WithFields(log.Fields{"package": "services", "event": "create_cluster", "request": requestId})
 
-	t := &terraform.Terraform{
-		Config: config,
-	}
-
-	tc := terraform.Client{
-		Terraform: t,
-	}
-
-	logger.Info("provisioning cluster")
+	client.Terraform.Config = config
 
 	c.Status = "provisioning"
 	err := s.dao.UpdateClusterField(s.db, c.Id, "status", "provisioning", requestId)
@@ -224,7 +209,7 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 		logger.Error("failed to update cluster during provisionining")
 	}
 
-	err = tc.ClientInit()
+	err = client.ClientInit()
 	if err != nil {
 		c.Status = "provision_failed"
 		logger.Error(err.Error())
@@ -237,7 +222,7 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 		return
 	}
 
-	state, stdout, err := tc.Apply()
+	state, stdout, err := client.Apply()
 	if err != nil {
 		c.Status = "provision_failed"
 		c.Message = err.Error()
@@ -258,9 +243,9 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 
 	// The state must be set in the client
 	//  in order to retrieve outputs
-	tc.Terraform.State = state
+	client.Terraform.State = state
 
-	outputs, err := tc.Outputs()
+	outputs, err := client.Outputs()
 	if err != nil {
 		c.Status = "provision_failed"
 		c.Message = err.Error()
@@ -279,7 +264,7 @@ func (s *ClusterService) TerraformProvisionCluster(c *models.Cluster, config []b
 		return
 	}
 
-	err = tc.ClientDestroy()
+	err = client.ClientDestroy()
 	if err != nil {
 		c.Status = "provision_failed"
 		c.Message = err.Error()
