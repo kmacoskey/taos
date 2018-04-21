@@ -20,6 +20,7 @@ import (
 	"github.com/kmacoskey/taos/app"
 	. "github.com/kmacoskey/taos/handlers"
 	"github.com/kmacoskey/taos/models"
+	"github.com/kmacoskey/taos/services"
 )
 
 func emptyhandler(w http.ResponseWriter, r *http.Request) {}
@@ -730,42 +731,6 @@ var _ = Describe("Cluster", func() {
 		})
 	})
 
-	/*
-	 * When the cluster is already deleted
-	 *   It should return a 409
-	 *   It should return json
-	 *   The json returned should be
-	 *     {
-	 *       "request_id": "550e8400-e29b-41d4-a716-446655440000",
-	 *       "status": "409 Conflict",
-	 *       "data": {
-	 *         "type": "error",
-	 *         "attributes": {
-	 *           "title": "Error while deleting cluster",
-	 *           "detail": "clusted is already deleted"
-	 *         }
-	 *       }
-	 *     }
-	 */
-
-	/*
-	 * When the cluster is already deleting
-	 *   It should return a 409
-	 *   It should return json
-	 *   The json returned should be
-	 *     {
-	 *       "request_id": "550e8400-e29b-41d4-a716-446655440000",
-	 *       "status": "409 Conflict",
-	 *       "data": {
-	 *         "type": "error",
-	 *         "attributes": {
-	 *           "title": "Error while deleting cluster",
-	 *           "detail": "clusted is already deleting"
-	 *         }
-	 *       }
-	 *     }
-	 */
-
 })
 
 /*
@@ -777,7 +742,7 @@ func NewValidClusterService() *ValidClusterService {
 	return &ValidClusterService{}
 }
 
-func (cs *ValidClusterService) CreateCluster(rc app.RequestContext) (*models.Cluster, error) {
+func (cs *ValidClusterService) CreateCluster(rc app.RequestContext, client services.TerraformClient) (*models.Cluster, error) {
 	var outputsBlob = []byte(`[{"name":"foobar","sensitive":"true","type":"foo","value":"bar"},{"name":"barfoo","sensitive":"false","type":"bar","value":"foo"}]`)
 
 	cluster1 := &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status", Outputs: outputsBlob}
@@ -797,7 +762,7 @@ func (cs *ValidClusterService) GetClusters(rc app.RequestContext) ([]models.Clus
 	return clusters, nil
 }
 
-func (cs *ValidClusterService) DeleteCluster(rc app.RequestContext, id string) (*models.Cluster, error) {
+func (cs *ValidClusterService) DeleteCluster(rc app.RequestContext, client services.TerraformClient, id string) (*models.Cluster, error) {
 	cluster1 := models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
 	return &cluster1, nil
 }
@@ -811,7 +776,7 @@ func NewEmptyClusterService() *EmptyClusterService {
 	return &EmptyClusterService{}
 }
 
-func (cs *EmptyClusterService) CreateCluster(rc app.RequestContext) (*models.Cluster, error) {
+func (cs *EmptyClusterService) CreateCluster(rc app.RequestContext, client services.TerraformClient) (*models.Cluster, error) {
 	return nil, nil
 }
 
@@ -823,7 +788,7 @@ func (cs *EmptyClusterService) GetClusters(rc app.RequestContext) ([]models.Clus
 	return []models.Cluster{}, nil
 }
 
-func (cs *EmptyClusterService) DeleteCluster(rc app.RequestContext, id string) (*models.Cluster, error) {
+func (cs *EmptyClusterService) DeleteCluster(rc app.RequestContext, client services.TerraformClient, id string) (*models.Cluster, error) {
 	return nil, nil
 }
 
@@ -836,7 +801,7 @@ func NewErroringClusterService() *ErroringClusterService {
 	return &ErroringClusterService{}
 }
 
-func (cs *ErroringClusterService) CreateCluster(rc app.RequestContext) (*models.Cluster, error) {
+func (cs *ErroringClusterService) CreateCluster(rc app.RequestContext, client services.TerraformClient) (*models.Cluster, error) {
 	return nil, errors.New("Cluster service error")
 }
 
@@ -848,6 +813,6 @@ func (cs *ErroringClusterService) GetClusters(rc app.RequestContext) ([]models.C
 	return nil, errors.New("Cluster service error")
 }
 
-func (cs *ErroringClusterService) DeleteCluster(rc app.RequestContext, id string) (*models.Cluster, error) {
+func (cs *ErroringClusterService) DeleteCluster(rc app.RequestContext, client services.TerraformClient, id string) (*models.Cluster, error) {
 	return nil, errors.New("Cluster service error")
 }

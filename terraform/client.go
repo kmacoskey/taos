@@ -37,6 +37,22 @@ func NewTerraformClient() *Client {
 	}
 }
 
+func (client *Client) Config() []byte {
+	return client.Terraform.Config
+}
+
+func (client *Client) SetConfig(config []byte) {
+	client.Terraform.Config = config
+}
+
+func (client *Client) State() []byte {
+	return client.Terraform.State
+}
+
+func (client *Client) SetState(state []byte) {
+	client.Terraform.State = state
+}
+
 func (client *Client) Version() (string, error) {
 	err, stdout, stderr := client.Command.Run("", []string{
 		"-v",

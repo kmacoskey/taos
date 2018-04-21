@@ -19,7 +19,6 @@ import (
 var _ = Describe("Cluster", func() {
 
 	var (
-		client                        *terraform.Client
 		cluster                       *models.Cluster
 		cluster1UUID                  string
 		cluster1                      *models.Cluster
@@ -39,10 +38,6 @@ var _ = Describe("Cluster", func() {
 
 		// Create a new RequestContext for each test
 		rc = app.RequestContext{}
-
-		client = terraform.NewTerraformClient()
-
-		// terraform_client := terraform.NewTerraformClient()
 
 		validTerraformConfig = []byte(`{"provider":{"google":{"project":"data-gp-toolsmiths","region":"us-central1"}},"output":{"foo":{"value":"bar"}}}`)
 		validNoOutputsTerraformConfig = []byte(`{"provider":{"google":{"project":"data-gp-toolsmiths","region":"us-central1"}}}`)
@@ -80,6 +75,7 @@ var _ = Describe("Cluster", func() {
 				clustersMap := make(map[string]*models.Cluster)
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
 				rc.SetTerraformConfig(validTerraformConfig)
+				client := new(PassingClient)
 				cluster, err = cs.CreateCluster(rc, client)
 			})
 			It("Should not error", func() {
@@ -88,39 +84,12 @@ var _ = Describe("Cluster", func() {
 			It("Should return a cluster", func() {
 				Expect(cluster).NotTo(BeNil())
 			})
-			FIt("Should eventually be provisioned", func() {
-				Eventually(func() string {
-					c, err := cs.GetCluster(rc, cluster.Id)
-					Expect(err).NotTo(HaveOccurred())
-					return c.Status
-				}, 10, 0.5).Should(Equal("provision_success"))
-			})
-			It("Should eventually set the message to the Terraform client output", func() {
-				Eventually(func() string {
-					c, err := cs.GetCluster(rc, cluster.Id)
-					Expect(err).NotTo(HaveOccurred())
-					return c.Message
-				}, 5, 0.5).Should(ContainSubstring("Apply complete! Resources: 0 added, 0 changed, 0 destroyed."))
-			})
-			It("Should eventually set the Terraform state", func() {
-				Eventually(func() []byte {
-					c, err := cs.GetCluster(rc, cluster.Id)
-					Expect(err).NotTo(HaveOccurred())
-					return c.TerraformState
-				}, 5, 0.5).ShouldNot(BeNil())
-			})
-			It("Should eventually set the Terraform outputs", func() {
-				Eventually(func() []byte {
-					c, err := cs.GetCluster(rc, cluster.Id)
-					Expect(err).NotTo(HaveOccurred())
-					return c.Outputs
-				}, 5, 0.5).ShouldNot(BeNil())
-			})
 		})
 
 		Context("When a cluster is not returned from the dao", func() {
 			BeforeEach(func() {
 				cs = NewClusterService(NewEmptyClusterDao(), NewMockDB().db)
+				client := new(FailingClient)
 				cluster, err = cs.CreateCluster(rc, client)
 			})
 			It("Should error", func() {
@@ -136,32 +105,7 @@ var _ = Describe("Cluster", func() {
 				clustersMap := make(map[string]*models.Cluster)
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
 				rc.SetTerraformConfig(invalidTerraformConfig)
-				cluster, err = cs.CreateCluster(rc, client)
-			})
-			It("Should not error", func() {
-				Expect(err).NotTo(HaveOccurred())
-			})
-			It("Should eventually change status to reflect an error", func() {
-				Eventually(func() string {
-					c, err := cs.GetCluster(rc, cluster.Id)
-					Expect(err).NotTo(HaveOccurred())
-					return c.Status
-				}, 2, 0.5).Should(Equal("provision_failed"))
-			})
-			It("Should eventually set the message to the terraform client output", func() {
-				Eventually(func() string {
-					c, err := cs.GetCluster(rc, cluster.Id)
-					Expect(err).NotTo(HaveOccurred())
-					return c.Message
-				}, 5, 0.5).Should(ContainSubstring(terraform.ErrorInvalidConfig))
-			})
-		})
-
-		Context("When there are no outputs defined in the config", func() {
-			BeforeEach(func() {
-				clustersMap := make(map[string]*models.Cluster)
-				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
-				rc.SetTerraformConfig(validNoOutputsTerraformConfig)
+				client := new(PassingClient)
 				cluster, err = cs.CreateCluster(rc, client)
 			})
 			It("Should not error", func() {
@@ -170,33 +114,21 @@ var _ = Describe("Cluster", func() {
 			It("Should return a cluster", func() {
 				Expect(cluster).NotTo(BeNil())
 			})
-			It("Should eventually be provisioned", func() {
-				Eventually(func() string {
-					c, err := cs.GetCluster(rc, cluster.Id)
-					Expect(err).NotTo(HaveOccurred())
-					return c.Status
-				}, 5, 0.5).Should(Equal("provision_success"))
+		})
+
+		Context("When there are no outputs defined in the config", func() {
+			BeforeEach(func() {
+				clustersMap := make(map[string]*models.Cluster)
+				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
+				rc.SetTerraformConfig(validNoOutputsTerraformConfig)
+				client := new(FailingClient)
+				cluster, err = cs.CreateCluster(rc, client)
 			})
-			It("Should eventually set the message to the Terraform client output", func() {
-				Eventually(func() string {
-					c, err := cs.GetCluster(rc, cluster.Id)
-					Expect(err).NotTo(HaveOccurred())
-					return c.Message
-				}, 5, 0.5).Should(ContainSubstring("Apply complete! Resources: 0 added, 0 changed, 0 destroyed."))
+			It("Should not error", func() {
+				Expect(err).NotTo(HaveOccurred())
 			})
-			It("Should eventually set the Terraform state", func() {
-				Eventually(func() []byte {
-					c, err := cs.GetCluster(rc, cluster.Id)
-					Expect(err).NotTo(HaveOccurred())
-					return c.TerraformState
-				}, 5, 0.5).ShouldNot(BeNil())
-			})
-			It("Should eventually set the Terraform to nil", func() {
-				Eventually(func() []byte {
-					c, err := cs.GetCluster(rc, cluster.Id)
-					Expect(err).NotTo(HaveOccurred())
-					return c.Outputs
-				}, 5, 0.5).Should(BeNil())
+			It("Should return a cluster", func() {
+				Expect(cluster).NotTo(BeNil())
 			})
 		})
 
@@ -307,6 +239,7 @@ var _ = Describe("Cluster", func() {
 				clustersMap := make(map[string]*models.Cluster)
 				clustersMap[cluster1UUID] = cluster1
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
+				client := new(PassingClient)
 				cluster, err = cs.DeleteCluster(rc, client, cluster1UUID)
 			})
 			It("Should not error", func() {
@@ -318,33 +251,13 @@ var _ = Describe("Cluster", func() {
 			It("The should be destroying", func() {
 				Expect(cluster.Status).To(Equal("destroying"))
 			})
-			It("Should eventually be destroyed", func() {
-				Eventually(func() string {
-					c, err := cs.GetCluster(rc, cluster.Id)
-					Expect(err).NotTo(HaveOccurred())
-					return c.Status
-				}, 3, 0.5).Should(Equal("destroyed"))
-			})
-			It("Should eventually set the message to the terraform client output", func() {
-				Eventually(func() string {
-					c, err := cs.GetCluster(rc, cluster.Id)
-					Expect(err).NotTo(HaveOccurred())
-					return c.Message
-				}, 5, 0.5).Should(ContainSubstring("Destroy complete! Resources: 0 destroyed."))
-			})
-			It("Should eventually set the Terraform state", func() {
-				Eventually(func() []byte {
-					c, err := cs.GetCluster(rc, cluster.Id)
-					Expect(err).NotTo(HaveOccurred())
-					return c.TerraformState
-				}, 5, 0.5).ShouldNot(BeNil())
-			})
 		})
 
 		Context("When it does not exist", func() {
 			BeforeEach(func() {
 				clustersMap := make(map[string]*models.Cluster)
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
+				client := new(PassingClient)
 				cluster, err = cs.DeleteCluster(rc, client, cluster1.Id)
 			})
 			It("should error", func() {
@@ -361,6 +274,7 @@ var _ = Describe("Cluster", func() {
 				cluster1.Status = "destroyed"
 				clustersMap[cluster1.Id] = cluster1
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
+				client := new(PassingClient)
 				cluster, err = cs.DeleteCluster(rc, client, cluster1.Id)
 			})
 			It("Should error", func() {
@@ -381,6 +295,34 @@ func NewMockDB() *MockDB {
 type MockDB struct {
 	db *sqlx.DB
 }
+
+type PassingClient struct{ Terraform terraform.TerraformInfra }
+
+func (client *PassingClient) ClientInit() error                { return nil }
+func (client *PassingClient) ClientDestroy() error             { return nil }
+func (client *PassingClient) Config() []byte                   { return []byte(`json`) }
+func (client *PassingClient) SetConfig(config []byte)          { return }
+func (client *PassingClient) State() []byte                    { return []byte(`json`) }
+func (client *PassingClient) SetState(state []byte)            { return }
+func (client *PassingClient) Init() (string, error)            { return "foo", nil }
+func (client *PassingClient) Plan() (string, error)            { return "foo", nil }
+func (client *PassingClient) Outputs() ([]byte, error)         { return []byte(`json`), nil }
+func (client *PassingClient) Apply() ([]byte, string, error)   { return nil, terraform.ApplySuccess, nil }
+func (client *PassingClient) Destroy() ([]byte, string, error) { return []byte(`json`), "foo", nil }
+
+type FailingClient struct{}
+
+func (client *FailingClient) ClientInit() error                { return errors.New("foo") }
+func (client *FailingClient) ClientDestroy() error             { return errors.New("foo") }
+func (client *FailingClient) Config() []byte                   { return []byte(`json`) }
+func (client *FailingClient) SetConfig(config []byte)          { return }
+func (client *FailingClient) State() []byte                    { return []byte(`json`) }
+func (client *FailingClient) SetState(state []byte)            { return }
+func (client *FailingClient) Init() (string, error)            { return "foo", errors.New("foo") }
+func (client *FailingClient) Plan() (string, error)            { return "foo", errors.New("foo") }
+func (client *FailingClient) Outputs() ([]byte, error)         { return []byte(`json`), errors.New("foo") }
+func (client *FailingClient) Apply() ([]byte, string, error)   { return nil, "", errors.New("") }
+func (client *FailingClient) Destroy() ([]byte, string, error) { return nil, "", errors.New("foo") }
 
 type ValidClusterDao struct {
 	clustersMap map[string]*models.Cluster

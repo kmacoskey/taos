@@ -12,14 +12,15 @@ import (
 	"github.com/kmacoskey/taos/daos"
 	"github.com/kmacoskey/taos/models"
 	"github.com/kmacoskey/taos/services"
+	"github.com/kmacoskey/taos/terraform"
 	log "github.com/sirupsen/logrus"
 )
 
 type clusterService interface {
 	GetCluster(rc app.RequestContext, id string) (*models.Cluster, error)
 	GetClusters(rc app.RequestContext) ([]models.Cluster, error)
-	CreateCluster(rc app.RequestContext) (*models.Cluster, error)
-	DeleteCluster(rc app.RequestContext, id string) (*models.Cluster, error)
+	CreateCluster(rc app.RequestContext, client services.TerraformClient) (*models.Cluster, error)
+	DeleteCluster(rc app.RequestContext, client services.TerraformClient, id string) (*models.Cluster, error)
 }
 
 type ClusterHandler struct {
@@ -165,7 +166,7 @@ func (ch *ClusterHandler) CreateCluster() app.Adapter {
 
 			context.SetTerraformConfig(body)
 
-			cluster, err := ch.cs.CreateCluster(context)
+			cluster, err := ch.cs.CreateCluster(context, terraform.NewTerraformClient())
 			// Internal error in any layer below handler
 			if err != nil {
 				response := ErrorResponseAttributes{
@@ -349,7 +350,7 @@ func (ch *ClusterHandler) DeleteCluster() app.Adapter {
 				return
 			}
 
-			cluster, err := ch.cs.DeleteCluster(context, id)
+			cluster, err := ch.cs.DeleteCluster(context, terraform.NewTerraformClient(), id)
 			// Internal error in any layer below handler
 			if err != nil {
 				response := ErrorResponseAttributes{
