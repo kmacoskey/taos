@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -28,6 +29,7 @@ var _ = Describe("Taos", func() {
 		server                     *http.Server
 		response                   *http.Response
 		body                       []byte
+		cluster_id                 string
 		cluster_response_json      *handlers.ClusterResponse
 		valid_terraform_config     []byte
 		expected_terraform_outputs map[string]handlers.TerraformOutput
@@ -140,6 +142,60 @@ var _ = Describe("Taos", func() {
 				}, 20, .5).Should(Equal(expected_terraform_outputs))
 			})
 
+		})
+	})
+
+	// ======================================================================
+	//      _      _      _
+	//   __| | ___| | ___| |_ ___
+	//  / _` |/ _ \ |/ _ \ __/ _ \
+	// | (_| |  __/ |  __/ ||  __/
+	//  \__,_|\___|_|\___|\__\___|
+	//
+	// ======================================================================
+	Describe("Deleting a cluster", func() {
+		Context("When everything goes ok", func() {
+			BeforeEach(func() {
+				response, body = httpClusterRequest("PUT", "http://localhost:8080/cluster", valid_terraform_config)
+				temp_cluster_response_json := &handlers.ClusterResponse{}
+				err = json.Unmarshal(body, &temp_cluster_response_json)
+				Expect(err).NotTo(HaveOccurred())
+
+				cluster_id = temp_cluster_response_json.Data.Attributes.Id
+				time.Sleep(20 * time.Second)
+
+				response, body = httpClusterRequest("DELETE", fmt.Sprintf("http://localhost:8080/cluster/%s", cluster_id), nil)
+				cluster_response_json = &handlers.ClusterResponse{}
+				err = json.Unmarshal(body, &cluster_response_json)
+			})
+			It("Should not error", func() {
+				Expect(err).NotTo(HaveOccurred())
+				Expect(response.StatusCode).To(Equal(http.StatusAccepted))
+			})
+			It("Should return json", func() {
+				Expect(err).NotTo(HaveOccurred())
+				Expect(response.Header.Get("Content-Type")).To(Equal("application/json"))
+			})
+			It("Should return a request uuid", func() {
+				id, err := uuid.Parse(cluster_response_json.RequestId)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(id).NotTo(BeNil())
+			})
+			It("Should return a cluster", func() {
+				Expect(cluster_response_json.Data.Type).To(Equal("cluster"))
+			})
+			It("Should eventually be destroyed", func() {
+				Eventually(func() string {
+					url := fmt.Sprintf("http://localhost:8080/cluster/%s", cluster_response_json.Data.Attributes.Id)
+
+					_, eventual_body := httpClusterRequest("GET", url, valid_terraform_config)
+					eventual_cluster_response_json := &handlers.ClusterResponse{}
+					err = json.Unmarshal(eventual_body, &eventual_cluster_response_json)
+					Expect(err).NotTo(HaveOccurred())
+
+					return eventual_cluster_response_json.Data.Attributes.Status
+				}, 20, .5).Should(Equal(models.ClusterStatusDestroyed))
+			})
 		})
 	})
 
