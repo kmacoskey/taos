@@ -18,6 +18,8 @@ type Output struct {
 
 const (
 	ClusterStatusProvisionSuccess = "provision_success"
+	ClusterStatusProvisionFailed  = "provision_failed"
+	ClusterStatusProvisionStart   = "provisioning"
 	ClusterStatusRequested        = "requested"
 	ClusterStatusDestroying       = "destroying"
 	ClusterStatusDestroyed        = "destroyed"

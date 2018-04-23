@@ -11,7 +11,7 @@ depends:
 	../../../../bin/glide up
 
 test:
-	ginkgo daos services terraform handlers .
+	ginkgo -slowSpecThreshold 30 daos services terraform handlers .
 
 cover: test
 	go tool cover -html=coverage-all.out

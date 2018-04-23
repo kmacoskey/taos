@@ -25,6 +25,10 @@ import (
 
 func emptyhandler(w http.ResponseWriter, r *http.Request) {}
 
+var (
+	outputsBlob = []byte(`{"foo":{"sensitive":true,"type":"string","value":"bar"},"bar":{"sensitive":false,"type":"string","value":"foo"}}`)
+)
+
 var _ = Describe("Cluster", func() {
 
 	var (
@@ -46,20 +50,16 @@ var _ = Describe("Cluster", func() {
 
 	BeforeEach(func() {
 		log.SetLevel(log.FatalLevel)
-		var outputsBlob = []byte(`[{"name":"foobar","sensitive":"true","type":"foo","value":"bar"},{"name":"barfoo","sensitive":"false","type":"bar","value":"foo"}]`)
-		var outputs = []TerraformOutput{
-			TerraformOutput{
-				Name:      "foobar",
-				Sensitive: "true",
-				Type:      "foo",
-				Value:     "bar",
-			},
-			TerraformOutput{
-				Name:      "barfoo",
-				Sensitive: "false",
-				Type:      "bar",
-				Value:     "foo",
-			},
+		outputs := make(map[string]TerraformOutput)
+		outputs["foo"] = TerraformOutput{
+			Sensitive: true,
+			Type:      "string",
+			Value:     "bar",
+		}
+		outputs["bar"] = TerraformOutput{
+			Sensitive: false,
+			Type:      "string",
+			Value:     "foo",
 		}
 
 		cluster1 = &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status", Outputs: outputsBlob}
@@ -743,27 +743,25 @@ func NewValidClusterService() *ValidClusterService {
 }
 
 func (cs *ValidClusterService) CreateCluster(rc app.RequestContext, client services.TerraformClient) (*models.Cluster, error) {
-	var outputsBlob = []byte(`[{"name":"foobar","sensitive":"true","type":"foo","value":"bar"},{"name":"barfoo","sensitive":"false","type":"bar","value":"foo"}]`)
-
 	cluster1 := &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status", Outputs: outputsBlob}
 	return cluster1, nil
 }
 
 func (cs *ValidClusterService) GetCluster(rc app.RequestContext, id string) (*models.Cluster, error) {
-	return &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}, nil
+	return &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status", Outputs: outputsBlob}, nil
 }
 
 func (cs *ValidClusterService) GetClusters(rc app.RequestContext) ([]models.Cluster, error) {
 	clusters := []models.Cluster{}
-	cluster1 := models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
-	cluster2 := models.Cluster{Id: "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
+	cluster1 := models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status", Outputs: outputsBlob}
+	cluster2 := models.Cluster{Id: "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status", Outputs: outputsBlob}
 	clusters = append(clusters, cluster1)
 	clusters = append(clusters, cluster2)
 	return clusters, nil
 }
 
 func (cs *ValidClusterService) DeleteCluster(rc app.RequestContext, client services.TerraformClient, id string) (*models.Cluster, error) {
-	cluster1 := models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status"}
+	cluster1 := models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status", Outputs: outputsBlob}
 	return &cluster1, nil
 }
 

@@ -296,6 +296,11 @@ func (s *ClusterService) TerraformProvisionCluster(client TerraformClient, c *mo
 			logger.Error(err.Error())
 			logger.Error("failed to update cluster during provision failure")
 		}
+		err = s.dao.UpdateClusterField(s.db, c.Id, "outputs", c.Outputs, requestId)
+		if err != nil {
+			logger.Error(err.Error())
+			logger.Error("failed to update cluster during provision failure")
+		}
 		return c
 	}
 

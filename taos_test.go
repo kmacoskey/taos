@@ -30,20 +30,17 @@ var _ = Describe("Taos", func() {
 		body                       []byte
 		cluster_response_json      *handlers.ClusterResponse
 		valid_terraform_config     []byte
-		expected_terraform_outputs *[]handlers.TerraformOutput
+		expected_terraform_outputs map[string]handlers.TerraformOutput
 	)
 
 	BeforeSuite(func() {
 		valid_terraform_config = []byte(`{"provider":{"google":{"project":"data-gp-toolsmiths","region":"us-central1"}},"output":{"foo":{"value":"bar"}}}`)
-		expected_terraform_outputs = &[]handlers.TerraformOutput{
-			handlers.TerraformOutput{
-				Name:      "foo",
-				Sensitive: "true",
-				Type:      "foo",
-				Value:     "foo",
-			},
+		expected_terraform_outputs = make(map[string]handlers.TerraformOutput)
+		expected_terraform_outputs["foo"] = handlers.TerraformOutput{
+			Sensitive: false,
+			Type:      "string",
+			Value:     "bar",
 		}
-
 		err = app.LoadServerConfig(&app.GlobalServerConfig, ".")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -131,7 +128,7 @@ var _ = Describe("Taos", func() {
 				}, 20, .5).Should(ContainSubstring(terraform.ApplySuccess))
 			})
 			It("Should eventually set the outputs", func() {
-				Eventually(func() []handlers.TerraformOutput {
+				Eventually(func() map[string]handlers.TerraformOutput {
 					url := fmt.Sprintf("http://localhost:8080/cluster/%s", cluster_response_json.Data.Attributes.Id)
 
 					_, eventual_body := httpClusterRequest("GET", url, valid_terraform_config)

@@ -50,18 +50,17 @@ type ClustersResponseData struct {
 }
 
 type ClusterResponseAttributes struct {
-	Id               string            `json:"id"`
-	Name             string            `json:"name"`
-	Status           string            `json:"status"`
-	Message          string            `json:"message"`
-	TerraformOutputs []TerraformOutput `json:"outputs"`
+	Id               string `json:"id"`
+	Name             string `json:"name"`
+	Status           string `json:"status"`
+	Message          string `json:"message"`
+	TerraformOutputs map[string]TerraformOutput
 }
 
 type TerraformOutput struct {
-	Name      string `json:"name" db:"name"`
-	Sensitive string `json:"sensitive" db:"sensitive"`
-	Type      string `json:"type" db:"type"`
-	Value     string `json:"value" db:"value"`
+	Sensitive bool   `json:"sensitive"`
+	Type      string `json:"type"`
+	Value     string `json:"value"`
 }
 
 type ErrorResponse struct {
@@ -383,11 +382,12 @@ func (ch *ClusterHandler) DeleteCluster() app.Adapter {
 }
 
 func newClusterResponse(cluster *models.Cluster, request_id string) *ClusterResponse {
-	terraform_outputs := []TerraformOutput{}
+
+	var outputs map[string]TerraformOutput
 	if cluster.Outputs != nil {
-		err := json.Unmarshal(cluster.Outputs, &terraform_outputs)
+		err := json.Unmarshal(cluster.Outputs, &outputs)
 		if err != nil {
-			panic(err)
+			fmt.Println(err)
 		}
 	}
 
@@ -396,7 +396,7 @@ func newClusterResponse(cluster *models.Cluster, request_id string) *ClusterResp
 		Name:             cluster.Name,
 		Status:           cluster.Status,
 		Message:          cluster.Message,
-		TerraformOutputs: terraform_outputs,
+		TerraformOutputs: outputs,
 	}
 
 	response_data := ClusterResponseData{
