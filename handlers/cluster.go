@@ -448,7 +448,7 @@ func respondWithJson(w http.ResponseWriter, response interface{}, status int) {
 		// logger.Panic("failed to marshal cluster data for response")
 	}
 
-	w.WriteHeader(status)
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
 	w.Write(js)
 }

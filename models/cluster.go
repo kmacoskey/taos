@@ -1,13 +1,13 @@
 package models
 
 type Cluster struct {
-	Id              string   `json:"id" db:"id"`
-	Name            string   `json:"name" db:"name"`
-	Status          string   `json:"status" db:"status"`
-	Message         string   `json:"message" db:"message"`
+	Id              string `json:"id" db:"id"`
+	Name            string `json:"name" db:"name"`
+	Status          string `json:"status" db:"status"`
+	Message         string `json:"message" db:"message"`
 	Outputs         []byte `json:"outputs" db:"outputs"`
-	TerraformConfig []byte   `json:"terraform_config" db:"terraform_config"`
-	TerraformState  []byte   `json:"terraform_state" db:"terraform_state"`
+	TerraformConfig []byte `json:"terraform_config" db:"terraform_config"`
+	TerraformState  []byte `json:"terraform_state" db:"terraform_state"`
 }
 
 type Output struct {
@@ -17,8 +17,9 @@ type Output struct {
 }
 
 const (
-	ClusterStatusRequested     = "requested"
-	ClusterStatusDestroying    = "destroying"
-	ClusterStatusDestroyed     = "destroyed"
-	ClusterStatusDestroyFailed = "destruction_failed"
+	ClusterStatusProvisionSuccess = "provision_success"
+	ClusterStatusRequested        = "requested"
+	ClusterStatusDestroying       = "destroying"
+	ClusterStatusDestroyed        = "destroyed"
+	ClusterStatusDestroyFailed    = "destruction_failed"
 )

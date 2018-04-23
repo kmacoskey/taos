@@ -28,6 +28,7 @@ func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, requestId strin
 		Id:              requestId,
 		Name:            sillyname.GenerateStupidName(),
 		Status:          models.ClusterStatusRequested,
+		Message:         "",
 		TerraformConfig: config,
 	}
 
@@ -37,7 +38,7 @@ func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, requestId strin
 		return nil, err
 	}
 
-	sql := `INSERT INTO clusters (id,name,status,terraform_config) VALUES (:id,:name,:status,:terraform_config) `
+	sql := `INSERT INTO clusters (id,name,status,message,terraform_config) VALUES (:id,:name,:status,:message,:terraform_config) `
 	_, err = tx.NamedQuery(sql, cluster)
 	if err != nil {
 		tx.Rollback()

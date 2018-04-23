@@ -11,7 +11,7 @@ depends:
 	../../../../bin/glide up
 
 test:
-	ginkgo -r
+	ginkgo daos services terraform handlers .
 
 cover: test
 	go tool cover -html=coverage-all.out

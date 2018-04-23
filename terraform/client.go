@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/davecgh/go-spew/spew"
 	log "github.com/sirupsen/logrus"
@@ -221,7 +222,7 @@ func (client *Client) Apply() ([]byte, string, error) {
 		return nil, "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr))
 	}
 
-	return state, stdout, nil
+	return state, strings.TrimSpace(stdout), nil
 }
 
 func (client *Client) Destroy() ([]byte, string, error) {
