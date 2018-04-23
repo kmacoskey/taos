@@ -1,7 +1,6 @@
 package terraform
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -256,7 +255,7 @@ func (client *Client) Destroy() ([]byte, string, error) {
 	return state, stdout, nil
 }
 
-func (client *Client) Outputs() ([]byte, error) {
+func (client *Client) Outputs() (string, error) {
 	logger := log.WithFields(log.Fields{
 		"topic":   "taos",
 		"package": "terraform",
@@ -265,7 +264,7 @@ func (client *Client) Outputs() ([]byte, error) {
 
 	_, err := client.Init()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	outputsArgs := []string{
@@ -289,16 +288,11 @@ func (client *Client) Outputs() ([]byte, error) {
 		// Therefore doesn't return an error, just return empty outputs
 		if len(matches) > 0 {
 			logger.Warn("no outputs defined in Terraform config")
-			return nil, nil
+			return "", nil
 		} else {
-			return nil, errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr))
+			return "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr))
 		}
 	}
 
-	json_outputs, err := json.Marshal(stdout)
-	if err != nil {
-		return nil, errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr))
-	}
-
-	return json_outputs, nil
+	return stdout, nil
 }

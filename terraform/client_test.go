@@ -26,9 +26,10 @@ var _ = Describe("Client", func() {
 		emptyTerraformState           []byte
 		validNoOutputsTerraformConfig []byte
 		validNoOutputsTerraformState  []byte
+		validTerraformOutputs         string
 		state                         []byte
 		stdout                        string
-		outputs                       []byte
+		outputs                       string
 		err                           error
 		version                       string
 	)
@@ -47,6 +48,8 @@ var _ = Describe("Client", func() {
 		validNoOutputsTerraformState = []byte(`{"version":3,"terraform_version":"0.11.3","serial":1,"lineage":"68c63875-913c-4d6a-9f87-c006b9d030a4","modules":[{"path":["root"],"outputs":{},"resources":{},"depends_on":[]}]}`)
 		invalidTerraformState = []byte(`NotTheJsonYouAreLookingFor`)
 		emptyTerraformState = []byte(``)
+
+		validTerraformOutputs = "{\"bar\":{\"sensitive\":false,\"type\":\"string\",\"value\":\"foo\" }"
 	})
 
 	AfterEach(func() {
@@ -782,8 +785,7 @@ var _ = Describe("Client", func() {
 				Expect(outputs).NotTo(BeNil())
 			})
 			It("Should return the expected outputs", func() {
-				Expect(outputs).To(ContainSubstring("foo"))
-				Expect(outputs).To(ContainSubstring("bar"))
+				Expect(outputs).To(Equal(validTerraformOutputs))
 			})
 		})
 
