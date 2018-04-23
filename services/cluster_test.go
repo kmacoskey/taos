@@ -16,6 +16,11 @@ import (
 	"github.com/kmacoskey/taos/terraform"
 )
 
+var (
+	validTerraformOutputs = "{\"bar\":{\"sensitive\":false,\"type\":\"string\",\"value\":\"foo\" }"
+	validTerraformState   = []byte(`{"version":3,"terraform_version":"0.11.3","serial":2,"lineage":"26655d4c-852a-41e4-b6f1-7b31ff2b2981","modules":[{"path":["root"],"outputs":{"foo":{"sensitive":false,"type":"string","value":"bar"}},"resources":{},"depends_on":[]}]}`)
+)
+
 var _ = Describe("Cluster", func() {
 
 	var (
@@ -132,6 +137,34 @@ var _ = Describe("Cluster", func() {
 			})
 		})
 
+	})
+
+	Describe("Terraform Provisioning a cluster", func() {
+		Context("When everything goes ok", func() {
+			BeforeEach(func() {
+				clustersMap := make(map[string]*models.Cluster)
+				clustersMap[cluster1.Id] = cluster1
+				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
+				rc.SetTerraformConfig(validTerraformConfig)
+				client := new(PassingClient)
+				cluster = cs.TerraformProvisionCluster(client, cluster1, validTerraformConfig, cluster1UUID)
+			})
+			It("Should return a cluster", func() {
+				Expect(cluster).NotTo(BeNil())
+			})
+			It("Should set the cluster status as expected", func() {
+				Expect(cluster.Status).To(Equal(models.ClusterStatusProvisionSuccess))
+			})
+			It("Should set the cluster message as expected", func() {
+				Expect(cluster.Message).To(Equal(terraform.ApplySuccess))
+			})
+			It("Should set the cluster state as expected", func() {
+				Expect(cluster.TerraformState).To(Equal(validTerraformState))
+			})
+			It("Should set the cluster outputs as expected", func() {
+				Expect(cluster.Outputs).To(Equal([]byte(validTerraformOutputs)))
+			})
+		})
 	})
 
 	// ======================================================================
@@ -298,16 +331,18 @@ type MockDB struct {
 
 type PassingClient struct{ Terraform terraform.TerraformInfra }
 
-func (client *PassingClient) ClientInit() error                { return nil }
-func (client *PassingClient) ClientDestroy() error             { return nil }
-func (client *PassingClient) Config() []byte                   { return []byte(`json`) }
-func (client *PassingClient) SetConfig(config []byte)          { return }
-func (client *PassingClient) State() []byte                    { return []byte(`json`) }
-func (client *PassingClient) SetState(state []byte)            { return }
-func (client *PassingClient) Init() (string, error)            { return "foo", nil }
-func (client *PassingClient) Plan() (string, error)            { return "foo", nil }
-func (client *PassingClient) Outputs() ([]byte, error)         { return []byte(`json`), nil }
-func (client *PassingClient) Apply() ([]byte, string, error)   { return nil, terraform.ApplySuccess, nil }
+func (client *PassingClient) ClientInit() error        { return nil }
+func (client *PassingClient) ClientDestroy() error     { return nil }
+func (client *PassingClient) Config() []byte           { return []byte(`json`) }
+func (client *PassingClient) SetConfig(config []byte)  { return }
+func (client *PassingClient) State() []byte            { return []byte(`json`) }
+func (client *PassingClient) SetState(state []byte)    { return }
+func (client *PassingClient) Init() (string, error)    { return "foo", nil }
+func (client *PassingClient) Plan() (string, error)    { return "foo", nil }
+func (client *PassingClient) Outputs() (string, error) { return validTerraformOutputs, nil }
+func (client *PassingClient) Apply() ([]byte, string, error) {
+	return validTerraformState, terraform.ApplySuccess, nil
+}
 func (client *PassingClient) Destroy() ([]byte, string, error) { return []byte(`json`), "foo", nil }
 
 type FailingClient struct{}
@@ -320,7 +355,7 @@ func (client *FailingClient) State() []byte                    { return []byte(`
 func (client *FailingClient) SetState(state []byte)            { return }
 func (client *FailingClient) Init() (string, error)            { return "foo", errors.New("foo") }
 func (client *FailingClient) Plan() (string, error)            { return "foo", errors.New("foo") }
-func (client *FailingClient) Outputs() ([]byte, error)         { return []byte(`json`), errors.New("foo") }
+func (client *FailingClient) Outputs() (string, error)         { return "", errors.New("foo") }
 func (client *FailingClient) Apply() ([]byte, string, error)   { return nil, "", errors.New("") }
 func (client *FailingClient) Destroy() ([]byte, string, error) { return nil, "", errors.New("foo") }
 
