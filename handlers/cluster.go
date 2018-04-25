@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io/ioutil"
 	"net/http"
 
@@ -24,167 +24,80 @@ type clusterService interface {
 }
 
 type ClusterHandler struct {
-	cs clusterService
+	service clusterService
 }
 
-type ClusterResponse struct {
-	RequestId string              `json:"request_id"`
-	Status    string              `json:"status"`
-	Data      ClusterResponseData `json:"data"`
-}
-
-type ClusterResponseData struct {
-	Type       string `json:"type"`
-	Attributes ClusterResponseAttributes
-}
-
-type ClustersResponse struct {
-	RequestId string               `json:"request_id"`
-	Status    string               `json:"status"`
-	Data      ClustersResponseData `json:"data"`
-}
-
-type ClustersResponseData struct {
-	Type       string `json:"type"`
-	Attributes []ClusterResponseAttributes
-}
-
-type ClusterResponseAttributes struct {
-	Id               string `json:"id"`
-	Name             string `json:"name"`
-	Status           string `json:"status"`
-	Message          string `json:"message"`
-	TerraformOutputs map[string]TerraformOutput
-}
-
-type TerraformOutput struct {
-	Sensitive bool   `json:"sensitive"`
-	Type      string `json:"type"`
-	Value     string `json:"value"`
-}
-
-type ErrorResponse struct {
-	RequestId string            `json:"request_id"`
-	Status    string            `json:"status"`
-	Data      ErrorResponseData `json:"data"`
-}
-
-type ErrorResponseData struct {
-	Type       string `json:"type"`
-	Attributes *ErrorResponseAttributes
-}
-
-type ErrorResponseAttributes struct {
-	Title  string `json:"title"`
-	Detail string `json:"detail"`
-}
-
-func NewClusterHandler(cs clusterService) *ClusterHandler {
-	return &ClusterHandler{cs}
+func NewClusterHandler(service clusterService) *ClusterHandler {
+	return &ClusterHandler{service}
 }
 
 func ServeClusterResources(router *mux.Router, db *sqlx.DB) {
-	h := NewClusterHandler(services.NewClusterService(daos.NewClusterDao(), db))
+	handler := NewClusterHandler(services.NewClusterService(daos.NewClusterDao(), db))
 
 	router.Handle("/cluster/{id}", app.Adapt(
 		router,
-		h.GetCluster(),
+		handler.GetCluster(),
 		app.WithRequestContext(),
 	)).Methods("GET")
 
 	router.Handle("/clusters", app.Adapt(
 		router,
-		h.GetClusters(),
+		handler.GetClusters(),
 		app.WithRequestContext(),
 	)).Methods("GET")
 
 	router.Handle("/cluster", app.Adapt(
 		router,
-		h.CreateCluster(),
+		handler.CreateCluster(),
 		app.WithRequestContext(),
 	)).Methods("PUT")
 
 	router.Handle("/cluster/{id}", app.Adapt(
 		router,
-		h.DeleteCluster(),
+		handler.DeleteCluster(),
 		app.WithRequestContext(),
 	)).Methods("DELETE")
 }
 
-func newErrorResponse(response *ErrorResponseAttributes, request_id string) *ErrorResponse {
-	response_data := ErrorResponseData{
-		Type:       "error",
-		Attributes: response,
-	}
-
-	request_response := ErrorResponse{
-		RequestId: request_id,
-		Data:      response_data,
-	}
-
-	return &request_response
-}
-
-// Request provisioning of a new Cluster
 func (ch *ClusterHandler) CreateCluster() app.Adapter {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			context := app.GetRequestContext(r)
 
-			logger := log.WithFields(log.Fields{
-				"topic":   "taos",
-				"package": "handlers",
-				"event":   "create_cluster",
-				"request": context.RequestId(),
-			})
+			logger := log.WithFields(log.Fields{"package": "handlers", "event": "create_cluster", "request": context.RequestId()})
 
-			elogger := log.WithFields(log.Fields{
-				"topic":   "taos",
-				"package": "handlers",
-				"event":   "create_cluster_error",
-				"request": context.RequestId(),
-			})
+			body, err := ioutil.ReadAll(r.Body)
 
-			logger.Info("request to create cluster")
-
-			body, _ := ioutil.ReadAll(r.Body)
-
-			// Will not continue if missing terraform configuration in request
-			if len(body) <= 0 {
-				response := ErrorResponseAttributes{
-					Title:  "create_cluster_error",
-					Detail: "Missing required terraform configuration for create cluster request",
-				}
-
-				elogger.Error("missing terraform config")
+			if err != nil {
+				response := ErrorResponseAttributes{Title: "create_cluster_error", Detail: err.Error()}
+				logger.Error(err)
 				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusBadRequest)
 				return
 			}
 
-			logger.Debug(body)
+			if len(body) <= 0 {
+				err := errors.New("Missing required terraform configuration for create cluster request")
+				response := ErrorResponseAttributes{Title: "create_cluster_error", Detail: err.Error()}
+				logger.Error("missing terraform config")
+				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusBadRequest)
+				return
+			}
 
 			context.SetTerraformConfig(body)
 
-			cluster, err := ch.cs.CreateCluster(context, terraform.NewTerraformClient())
-			// Internal error in any layer below handler
-			if err != nil {
-				response := ErrorResponseAttributes{
-					Title:  "create_cluster_error",
-					Detail: err.Error(),
-				}
+			cluster, err := ch.service.CreateCluster(context, terraform.NewTerraformClient())
 
-				elogger.Error(err.Error())
+			// Currently no expectation for the situation that
+			// err == nil && cluster == nil
+			// If a cluster is not returned, then an err has occured
+			// Eventually this may capture the situation where resources are not available
+			if err != nil || cluster == nil {
+				response := ErrorResponseAttributes{Title: "create_cluster_error", Detail: err.Error()}
+				logger.Error(err.Error())
 				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusInternalServerError)
 				return
 			}
 
-			// No expectation for the situation that
-			// 	err == nil && cluster == nil
-			// Currently if a cluster is not returned, then something went wrong
-			// Eventually this may capture the situation where resources are not available
-
-			logger.Info("cluster created")
-			logger.Debug(cluster)
 			respondWithJson(w, newClusterResponse(cluster, context.RequestId()), http.StatusAccepted)
 		})
 	}
@@ -196,64 +109,36 @@ func (ch *ClusterHandler) GetCluster() app.Adapter {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			context := app.GetRequestContext(r)
 
-			logger := log.WithFields(log.Fields{
-				"topic":   "taos",
-				"package": "handlers",
-				"event":   "get_cluster",
-				"request": context.RequestId(),
-			})
-
-			elogger := log.WithFields(log.Fields{
-				"topic":   "taos",
-				"package": "handlers",
-				"event":   "get_cluster_error",
-				"request": context.RequestId(),
-			})
+			logger := log.WithFields(log.Fields{"package": "handlers", "event": "get_cluster", "request": context.RequestId()})
 
 			vars := mux.Vars(r)
 			id := vars["id"]
 
-			logger.Info(fmt.Sprintf("request to get cluster '%s'", id))
-
-			// Will not continue if missing id in request
 			if len(id) <= 0 {
-				response := ErrorResponseAttributes{
-					Title:  "get_cluster_error",
-					Detail: "Missing required cluster id",
-				}
-
-				elogger.Error("missing id")
+				err := errors.New("missing required cluster id")
+				response := ErrorResponseAttributes{Title: "get_cluster_error", Detail: err.Error()}
+				logger.Error(err)
 				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusBadRequest)
 				return
 			}
 
-			cluster, err := ch.cs.GetCluster(context, id)
-			// Internal error in any layer below handler
+			cluster, err := ch.service.GetCluster(context, id)
 			if err != nil {
-				response := ErrorResponseAttributes{
-					Title:  "get_cluster_error",
-					Detail: err.Error(),
-				}
-
-				elogger.Error(err.Error())
+				response := ErrorResponseAttributes{Title: "get_cluster_error", Detail: err.Error()}
+				logger.Error(err.Error())
 				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusInternalServerError)
 				return
 			}
 
 			// Cluster does not exist
 			if cluster == nil {
-				response := ErrorResponseAttributes{
-					Title:  "get_cluster_error",
-					Detail: "cluster not found",
-				}
-
-				elogger.Error("cluster not found")
+				err := errors.New("cluster not found")
+				response := ErrorResponseAttributes{Title: "get_cluster_error", Detail: err.Error()}
+				logger.Error(err)
 				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusNotFound)
 				return
 			}
 
-			logger.Info("returning cluster")
-			logger.Debug(cluster)
 			respondWithJson(w, newClusterResponse(cluster, context.RequestId()), http.StatusOK)
 		})
 	}
@@ -265,49 +150,16 @@ func (ch *ClusterHandler) GetClusters() app.Adapter {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			context := app.GetRequestContext(r)
 
-			logger := log.WithFields(log.Fields{
-				"topic":   "taos",
-				"package": "handlers",
-				"event":   "get_clusters",
-				"request": context.RequestId(),
-			})
+			logger := log.WithFields(log.Fields{"package": "handlers", "event": "get_clusters", "request": context.RequestId()})
 
-			elogger := log.WithFields(log.Fields{
-				"topic":   "taos",
-				"package": "handlers",
-				"event":   "get_clusters_error",
-				"request": context.RequestId(),
-			})
-
-			logger.Info("request to get clusters")
-
-			clusters, err := ch.cs.GetClusters(context)
-			// Internal error in any layer below handler
+			clusters, err := ch.service.GetClusters(context)
 			if err != nil {
-				response := ErrorResponseAttributes{
-					Title:  "get_clusters_error",
-					Detail: err.Error(),
-				}
-
-				elogger.Error(err.Error())
+				response := ErrorResponseAttributes{Title: "get_clusters_error", Detail: err.Error()}
+				logger.Error(err.Error())
 				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusInternalServerError)
 				return
 			}
 
-			// No clusters exists
-			if clusters == nil {
-				response := ErrorResponseAttributes{
-					Title:  "get_clusters_error",
-					Detail: "clusters not found",
-				}
-
-				elogger.Error("clusters not found")
-				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusNotFound)
-				return
-			}
-
-			logger.Info("returning clusters")
-			logger.Debug(clusters)
 			respondWithJson(w, newClustersResponse(clusters, context.RequestId()), http.StatusOK)
 		})
 	}
@@ -318,76 +170,49 @@ func (ch *ClusterHandler) DeleteCluster() app.Adapter {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			context := app.GetRequestContext(r)
 
-			logger := log.WithFields(log.Fields{
-				"topic":   "taos",
-				"package": "handlers",
-				"event":   "delete_cluster",
-				"request": context.RequestId(),
-			})
-
-			elogger := log.WithFields(log.Fields{
-				"topic":   "taos",
-				"package": "handlers",
-				"event":   "delete_cluster_error",
-				"request": context.RequestId(),
-			})
+			logger := log.WithFields(log.Fields{"package": "handlers", "event": "delete_cluster", "request": context.RequestId()})
 
 			vars := mux.Vars(r)
 			id := vars["id"]
 
-			logger.Info(fmt.Sprintf("request to delete cluster '%s'", id))
-
-			// Will not continue if missing id in request
 			if len(id) <= 0 {
-				response := ErrorResponseAttributes{
-					Title:  "delete_cluster_error",
-					Detail: "Missing required cluster id",
-				}
-
-				elogger.Error("missing id")
+				err := errors.New("missing required cluster id")
+				response := ErrorResponseAttributes{Title: "delete_cluster_error", Detail: err.Error()}
+				logger.Error(err.Error())
 				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusBadRequest)
 				return
 			}
 
-			cluster, err := ch.cs.DeleteCluster(context, terraform.NewTerraformClient(), id)
-			// Internal error in any layer below handler
+			cluster, err := ch.service.DeleteCluster(context, terraform.NewTerraformClient(), id)
 			if err != nil {
-				response := ErrorResponseAttributes{
-					Title:  "delete_cluster_error",
-					Detail: err.Error(),
-				}
-
-				elogger.Error(err.Error())
+				response := ErrorResponseAttributes{Title: "delete_cluster_error", Detail: err.Error()}
+				logger.Error(err.Error())
 				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusInternalServerError)
 				return
 			}
 
-			// Cluster does not exist
 			if cluster == nil {
-				response := ErrorResponseAttributes{
-					Title:  "delete_cluster_error",
-					Detail: "cluster not found",
-				}
-
-				elogger.Error("cluster not found")
+				err := errors.New("cluster not found")
+				response := ErrorResponseAttributes{Title: "delete_cluster_error", Detail: err.Error()}
+				logger.Error(err)
 				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusNotFound)
 				return
 			}
 
-			logger.Info("deleting cluster")
-			logger.Debug(cluster)
 			respondWithJson(w, newClusterResponse(cluster, context.RequestId()), http.StatusAccepted)
 		})
 	}
 }
 
 func newClusterResponse(cluster *models.Cluster, request_id string) *ClusterResponse {
+	logger := log.WithFields(log.Fields{"package": "handlers", "event": "cluster_response", "request": request_id})
 
 	var outputs map[string]TerraformOutput
 	if cluster.Outputs != nil {
 		err := json.Unmarshal(cluster.Outputs, &outputs)
 		if err != nil {
-			fmt.Println(err)
+			logger.Error(err)
+			return nil
 		}
 	}
 
@@ -399,55 +224,59 @@ func newClusterResponse(cluster *models.Cluster, request_id string) *ClusterResp
 		TerraformOutputs: outputs,
 	}
 
-	response_data := ClusterResponseData{
-		Type:       "cluster",
-		Attributes: cluster_response,
-	}
-
-	request_response := ClusterResponse{
-		RequestId: request_id,
-		Data:      response_data,
-	}
+	response_data := ClusterResponseData{Type: "cluster", Attributes: cluster_response}
+	request_response := ClusterResponse{RequestId: request_id, Data: response_data}
 
 	return &request_response
 }
 
 func newClustersResponse(clusters []models.Cluster, request_id string) *ClustersResponse {
+	logger := log.WithFields(log.Fields{"package": "handlers", "event": "clusters_response", "request": request_id})
 
 	cluster_list := []ClusterResponseAttributes{}
 
 	for _, cluster := range clusters {
+		var outputs map[string]TerraformOutput
+		if cluster.Outputs != nil {
+			err := json.Unmarshal(cluster.Outputs, &outputs)
+			if err != nil {
+				logger.Error(err)
+				return nil
+			}
+		}
+
 		cluster_response := ClusterResponseAttributes{
 			Id:               cluster.Id,
 			Name:             cluster.Name,
 			Status:           cluster.Status,
 			Message:          cluster.Message,
-			TerraformOutputs: nil,
+			TerraformOutputs: outputs,
 		}
 
 		cluster_list = append(cluster_list, cluster_response)
 	}
 
-	response_data := ClustersResponseData{
-		Type:       "clusters",
-		Attributes: cluster_list,
-	}
-
-	request_response := ClustersResponse{
-		RequestId: request_id,
-		Data:      response_data,
-	}
+	response_data := ClustersResponseData{Type: "clusters", Attributes: cluster_list}
+	request_response := ClustersResponse{RequestId: request_id, Data: response_data}
 
 	return &request_response
 }
 
+func newErrorResponse(response *ErrorResponseAttributes, request_id string) *ErrorResponse {
+	response_data := ErrorResponseData{Type: "error", Attributes: response}
+	request_response := ErrorResponse{RequestId: request_id, Data: response_data}
+	return &request_response
+}
+
 func respondWithJson(w http.ResponseWriter, response interface{}, status int) {
+	logger := log.WithFields(log.Fields{"package": "handlers", "event": "json_response"})
+
 	js, err := json.Marshal(response)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		// logger.Panic("failed to marshal cluster data for response")
+		logger.Error(err)
 	}
 
+	// Set() header then WriteHeader(), the order does matter
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	w.Write(js)

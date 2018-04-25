@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
 	. "github.com/onsi/ginkgo"
@@ -84,25 +83,14 @@ var _ = Describe("Taos", func() {
 				cluster_response_json = &handlers.ClusterResponse{}
 				err = json.Unmarshal(body, &cluster_response_json)
 			})
-			It("Should not error", func() {
+			// Note, this test is a bit loaded in it's concerns
+			//  in order to limit the individual specs. It is slow
+			//  when testing actually runs terraform.
+			It("Should return the expected cluster", func() {
+				Expect(err).NotTo(HaveOccurred())
 				Expect(response.StatusCode).To(Equal(http.StatusAccepted))
-			})
-			It("Should return json", func() {
-				Expect(err).NotTo(HaveOccurred())
 				Expect(response.Header.Get("Content-Type")).To(Equal("application/json"))
-			})
-			It("Should return a request uuid", func() {
-				id, err := uuid.Parse(cluster_response_json.RequestId)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(id).NotTo(BeNil())
-			})
-			It("Should return a cluster", func() {
 				Expect(cluster_response_json.Data.Type).To(Equal("cluster"))
-			})
-			It("Should return a cluster of the same id as the request id", func() {
-				Expect(cluster_response_json.Data.Attributes.Id).To(Equal(cluster_response_json.RequestId))
-			})
-			It("Should return a requested cluster", func() {
 				Expect(cluster_response_json.Data.Attributes.Status).To(Equal(models.ClusterStatusRequested))
 			})
 			It("Should eventually be provisioned", func() {
@@ -115,7 +103,7 @@ var _ = Describe("Taos", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					return eventual_cluster_response_json.Data.Attributes.Status
-				}, 20, .5).Should(Equal(models.ClusterStatusProvisionSuccess))
+				}, 30, .5).Should(Equal(models.ClusterStatusProvisionSuccess))
 			})
 			It("Should eventually set the message", func() {
 				Eventually(func() string {
@@ -127,7 +115,7 @@ var _ = Describe("Taos", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					return eventual_cluster_response_json.Data.Attributes.Message
-				}, 20, .5).Should(ContainSubstring(terraform.ApplySuccess))
+				}, 30, .5).Should(ContainSubstring(terraform.ApplySuccess))
 			})
 			It("Should eventually set the outputs", func() {
 				Eventually(func() map[string]handlers.TerraformOutput {
@@ -139,7 +127,7 @@ var _ = Describe("Taos", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					return eventual_cluster_response_json.Data.Attributes.TerraformOutputs
-				}, 20, .5).Should(Equal(expected_terraform_outputs))
+				}, 30, .5).Should(Equal(expected_terraform_outputs))
 			})
 
 		})
@@ -162,26 +150,19 @@ var _ = Describe("Taos", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				cluster_id = temp_cluster_response_json.Data.Attributes.Id
-				time.Sleep(20 * time.Second)
+				time.Sleep(30 * time.Second)
 
 				response, body = httpClusterRequest("DELETE", fmt.Sprintf("http://localhost:8080/cluster/%s", cluster_id), nil)
 				cluster_response_json = &handlers.ClusterResponse{}
 				err = json.Unmarshal(body, &cluster_response_json)
 			})
-			It("Should not error", func() {
+			// Note, this test is a bit loaded in it's concerns
+			//  in order to limit the individual specs. It is slow
+			//  when testing actually runs terraform.
+			It("Should return a successfully cluster", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(response.StatusCode).To(Equal(http.StatusAccepted))
-			})
-			It("Should return json", func() {
-				Expect(err).NotTo(HaveOccurred())
 				Expect(response.Header.Get("Content-Type")).To(Equal("application/json"))
-			})
-			It("Should return a request uuid", func() {
-				id, err := uuid.Parse(cluster_response_json.RequestId)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(id).NotTo(BeNil())
-			})
-			It("Should return a cluster", func() {
 				Expect(cluster_response_json.Data.Type).To(Equal("cluster"))
 			})
 			It("Should eventually be destroyed", func() {
@@ -194,7 +175,7 @@ var _ = Describe("Taos", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					return eventual_cluster_response_json.Data.Attributes.Status
-				}, 20, .5).Should(Equal(models.ClusterStatusDestroyed))
+				}, 30, .5).Should(Equal(models.ClusterStatusDestroyed))
 			})
 		})
 	})
