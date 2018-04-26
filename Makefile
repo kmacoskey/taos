@@ -7,9 +7,6 @@ LDFLAGS:=-ldflags "-X github.com/kmacoskey/taos/app.Version=${VERSION}"
 
 default: build
 
-depends:
-	../../../../bin/glide up
-
 test:
 	ginkgo -slowSpecThreshold 40 daos services terraform handlers .
 
