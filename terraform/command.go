@@ -18,11 +18,7 @@ type TerraformCommandRunner interface {
 type TerraformCommand struct{}
 
 func (tc TerraformCommand) Run(directory string, args []string) (error, string, string) {
-	logger := log.WithFields(log.Fields{
-		"topic":   "taos",
-		"package": "terraform",
-		"event":   "run_command",
-	})
+	logger := log.WithFields(log.Fields{"package": "terraform", "event": "run_command"})
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -57,6 +53,8 @@ func (tc TerraformCommand) Run(directory string, args []string) (error, string, 
 	cmd.Stderr = &stderr
 
 	err := cmd.Run()
+
+	logger.Debug(stdout.String())
 
 	return err, stdout.String(), stderr.String()
 }

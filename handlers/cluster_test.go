@@ -89,7 +89,7 @@ var _ = Describe("Cluster", func() {
 				adapter := ch.CreateCluster()
 				handler := adapter(http.HandlerFunc(emptyhandler))
 
-				var jsonStr = []byte(`{"title":"Buy cheese and bread for breakfast."}`)
+				var jsonStr = []byte(`{"config":"{\"foo\":\"Buy cheese and bread for breakfast.\"}","timeout":"10m"}`)
 				request := httptest.NewRequest("POST", "/cluster", bytes.NewBuffer(jsonStr))
 				request.Header.Set("Content-Type", "application/json")
 

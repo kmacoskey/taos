@@ -13,7 +13,7 @@ import (
 type clusterDao interface {
 	GetCluster(db *sqlx.DB, id string, requestId string) (*models.Cluster, error)
 	GetClusters(db *sqlx.DB, requestId string) ([]models.Cluster, error)
-	CreateCluster(db *sqlx.DB, config []byte, requestId string) (*models.Cluster, error)
+	CreateCluster(db *sqlx.DB, config []byte, timeout string, requestId string) (*models.Cluster, error)
 	UpdateClusterField(db *sqlx.DB, id string, field string, value interface{}, requestId string) error
 }
 
@@ -51,7 +51,7 @@ func (s *ClusterService) GetClusters(context app.RequestContext) ([]models.Clust
 }
 
 func (s *ClusterService) CreateCluster(context app.RequestContext, client TerraformClient) (*models.Cluster, error) {
-	cluster, err := s.dao.CreateCluster(s.db, context.TerraformConfig(), context.RequestId())
+	cluster, err := s.dao.CreateCluster(s.db, context.TerraformConfig(), context.Timeout(), context.RequestId())
 	if err != nil {
 		return cluster, err
 	}
@@ -107,6 +107,7 @@ func (s *ClusterService) TerraformDestroyCluster(client TerraformClient, cluster
 	err := client.ClientInit()
 	if err != nil {
 		cluster.Status = models.ClusterStatusDestroyFailed
+		cluster.Message = err.Error()
 		logger.Error(err.Error())
 		err := s.dao.UpdateClusterField(s.db, cluster.Id, "status", models.ClusterStatusDestroyFailed, requestId)
 		if err != nil {

@@ -21,12 +21,7 @@ var RequestContextKey string = "request"
 func WithRequestContext() Adapter {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			logger := log.WithFields(log.Fields{
-				"topic":   "taos",
-				"package": "app",
-				"context": "requestcontext",
-				"event":   "newrequest",
-			})
+			logger := log.WithFields(log.Fields{"package": "app", "context": "requestcontext", "event": "newrequest"})
 			rc := NewRequestContext(r.Context(), r)
 			ctx := context.WithValue(r.Context(), RequestContextKey, rc)
 			logger.Debug("created new request context")
@@ -38,6 +33,7 @@ func WithRequestContext() Adapter {
 type RequestContext struct {
 	tx              *sqlx.Tx
 	terraformConfig []byte
+	timeout         string
 	rollback        bool
 	requestTime     time.Time
 	requestID       string
@@ -72,6 +68,14 @@ func (rs *RequestContext) TerraformConfig() []byte {
 
 func (rs *RequestContext) SetTerraformConfig(tfcfg []byte) {
 	rs.terraformConfig = tfcfg
+}
+
+func (rs *RequestContext) Timeout() string {
+	return rs.timeout
+}
+
+func (rs *RequestContext) SetTimeout(timeout string) {
+	rs.timeout = timeout
 }
 
 func (rs *RequestContext) RequestTime() time.Time {

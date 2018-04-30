@@ -34,6 +34,7 @@ var _ = Describe("Cluster", func() {
 		rc                            app.RequestContext
 		err                           error
 		validTerraformConfig          []byte
+		validTimeout                  string
 		invalidTerraformConfig        []byte
 		validNoOutputsTerraformConfig []byte
 	)
@@ -44,6 +45,7 @@ var _ = Describe("Cluster", func() {
 		// Create a new RequestContext for each test
 		rc = app.RequestContext{}
 
+		validTimeout = "10m"
 		validTerraformConfig = []byte(`{"provider":{"google":{"project":"data-gp-toolsmiths","region":"us-central1"}},"output":{"foo":{"value":"bar"}}}`)
 		validNoOutputsTerraformConfig = []byte(`{"provider":{"google":{"project":"data-gp-toolsmiths","region":"us-central1"}}}`)
 		invalidTerraformConfig = []byte(`notjson`)
@@ -80,6 +82,7 @@ var _ = Describe("Cluster", func() {
 				clustersMap := make(map[string]*models.Cluster)
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
 				rc.SetTerraformConfig(validTerraformConfig)
+				rc.SetTimeout(validTimeout)
 				client := new(PassingClient)
 				cluster, err = cs.CreateCluster(rc, client)
 			})
@@ -369,7 +372,7 @@ func NewValidClusterDao(cm map[string]*models.Cluster) *ValidClusterDao {
 	}
 }
 
-func (dao *ValidClusterDao) CreateCluster(db *sqlx.DB, config []byte, requestId string) (*models.Cluster, error) {
+func (dao *ValidClusterDao) CreateCluster(db *sqlx.DB, config []byte, timeout string, requestId string) (*models.Cluster, error) {
 	uuid := uuid.Must(uuid.NewV4()).String()
 	dao.clustersMap[uuid] = &models.Cluster{
 		Id:              uuid,
@@ -428,7 +431,7 @@ func NewEmptyClusterDao() *EmptyClusterDao {
 	return &EmptyClusterDao{}
 }
 
-func (dao *EmptyClusterDao) CreateCluster(db *sqlx.DB, config []byte, requestId string) (*models.Cluster, error) {
+func (dao *EmptyClusterDao) CreateCluster(db *sqlx.DB, config []byte, timeout string, requestId string) (*models.Cluster, error) {
 	return nil, errors.New("foo")
 }
 

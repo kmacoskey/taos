@@ -1,5 +1,10 @@
 package handlers
 
+type ClusterRequest struct {
+	TerraformConfig string `json:"config"`
+	Timeout         string `json:"timeout"`
+}
+
 type ClusterResponse struct {
 	RequestId string              `json:"request_id"`
 	Status    string              `json:"status"`

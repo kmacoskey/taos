@@ -3,6 +3,7 @@ package daos
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	sillyname "github.com/Pallinder/sillyname-go"
 	"github.com/jmoiron/sqlx"
@@ -16,12 +17,19 @@ func NewClusterDao() *ClusterDao {
 	return &ClusterDao{}
 }
 
-func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, requestId string) (*models.Cluster, error) {
+func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, timeout string, requestId string) (*models.Cluster, error) {
 	logger := log.WithFields(log.Fields{"package": "daos", "event": "create_cluster", "request": requestId})
 
 	if len(config) == 0 {
-		logger.Error("cannot create cluster without config")
-		return nil, errors.New("cannot create cluster without config")
+		err := errors.New("cannot create cluster without config")
+		logger.Error(err)
+		return nil, err
+	}
+
+	if len(timeout) == 0 {
+		err := errors.New("cannot create cluster without timeout")
+		logger.Error(err)
+		return nil, err
 	}
 
 	cluster := models.Cluster{
@@ -30,6 +38,8 @@ func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, requestId strin
 		Status:          models.ClusterStatusRequested,
 		Message:         "",
 		TerraformConfig: config,
+		Timestamp:       time.Now(),
+		Timeout:         timeout,
 	}
 
 	tx, err := db.Beginx()
@@ -38,7 +48,23 @@ func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, requestId strin
 		return nil, err
 	}
 
-	sql := `INSERT INTO clusters (id,name,status,message,terraform_config) VALUES (:id,:name,:status,:message,:terraform_config) `
+	sql := `INSERT INTO clusters (
+		id,
+		name,
+		status,
+		message,
+		terraform_config,
+		timestamp,
+		timeout
+	) VALUES (
+			:id,
+			:name,
+			:status,
+			:message,
+			:terraform_config,
+			:timestamp,
+			:timeout
+		)`
 	_, err = tx.NamedQuery(sql, cluster)
 	if err != nil {
 		tx.Rollback()
@@ -47,7 +73,6 @@ func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, requestId strin
 	}
 
 	tx.Commit()
-	logger.Info("new cluster created in database")
 
 	return &cluster, nil
 }
@@ -58,13 +83,15 @@ func (dao *ClusterDao) GetCluster(db *sqlx.DB, id string, requestId string) (*mo
 	cluster := models.Cluster{}
 
 	if len(requestId) == 0 {
-		logger.Error("cannot get cluster without requestId")
-		return nil, errors.New("cannot get cluster without requestId")
+		err := errors.New("cannot get cluster without requestId")
+		logger.Error(err)
+		return nil, err
 	}
 
 	if len(id) == 0 {
-		logger.Error("cannot get cluster without id")
-		return nil, errors.New("cannot get cluster without id")
+		err := errors.New("cannot get cluster without id")
+		logger.Error(err)
+		return nil, err
 	}
 
 	tx, err := db.Beginx()
@@ -83,8 +110,6 @@ func (dao *ClusterDao) GetCluster(db *sqlx.DB, id string, requestId string) (*mo
 
 	tx.Commit()
 
-	logger.Info(fmt.Sprintf("cluster '%s' retrieved", id))
-
 	return &cluster, nil
 }
 
@@ -92,8 +117,9 @@ func (dao *ClusterDao) GetClusters(db *sqlx.DB, requestId string) ([]models.Clus
 	logger := log.WithFields(log.Fields{"package": "daos", "event": "get_clusters", "request": requestId})
 
 	if len(requestId) == 0 {
-		logger.Error("cannot get cluster without requestId")
-		return nil, errors.New("cannot get cluster without requestId")
+		err := errors.New("cannot get cluster without requestId")
+		logger.Error(err)
+		return nil, err
 	}
 
 	tx, err := db.Beginx()
@@ -125,8 +151,6 @@ func (dao *ClusterDao) GetClusters(db *sqlx.DB, requestId string) ([]models.Clus
 
 	tx.Commit()
 
-	logger.Info(fmt.Sprintf("'%s' cluster retrieved", len(clusters)))
-
 	return clusters, nil
 }
 
@@ -151,6 +175,11 @@ func (dao *ClusterDao) UpdateClusterField(db *sqlx.DB, id string, field string, 
 		sql = `UPDATE clusters SET terraform_config = $2 WHERE id = $1 `
 	case "terraform_state":
 		sql = `UPDATE clusters SET terraform_state = $2 WHERE id = $1 `
+	case "timeout":
+		sql = `UPDATE clusters SET timeout = $2 WHERE id = $1 `
+	case "timestamp":
+		tx.Rollback()
+		return errors.New("cannot update timestamp field")
 	default:
 		tx.Rollback()
 		return errors.New(fmt.Sprintf("field '%s' does not exist", field))
@@ -176,8 +205,6 @@ func (dao *ClusterDao) UpdateClusterField(db *sqlx.DB, id string, field string, 
 	}
 
 	tx.Commit()
-
-	logger.Info(fmt.Sprintf("'%s':'%s':'%s'", id, field, value))
 
 	return nil
 }

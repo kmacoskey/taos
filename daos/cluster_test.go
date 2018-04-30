@@ -1,6 +1,8 @@
 package daos_test
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
@@ -26,7 +28,9 @@ var (
 				message 					text,
 				outputs 					json,
 				terraform_state 	json,
-				terraform_config 	json
+				terraform_config 	json,
+				timestamp 				timestamp,
+				timeout           text
 		)`
 	truncate_clusters = `TRUNCATE TABLE clusters`
 	drop_clusters_ddl = `DROP TABLE IF EXISTS cluster_test.clusters CASCADE`
@@ -70,6 +74,8 @@ var _ = Describe("Cluster", func() {
 		clusters_1             *models.Cluster
 		clusters_2             *models.Cluster
 		valid_request_id       string
+		valid_timeout          string
+		new_timestamp          time.Time
 		clusters               []models.Cluster
 		err                    error
 		dao                    ClusterDao
@@ -82,6 +88,8 @@ var _ = Describe("Cluster", func() {
 
 		valid_request_id = "c12c2d58-2af0-11e8-b467-0ed5f89f718b"
 
+		valid_timeout = "10m"
+
 		clusters_1 = &models.Cluster{
 			Id:              "a19e2758-0ec5-11e8-ba89-0ed5f89f718b",
 			Name:            "cluster_1",
@@ -90,6 +98,8 @@ var _ = Describe("Cluster", func() {
 			Outputs:         []byte(`{}`),
 			TerraformState:  []byte(`{}`),
 			TerraformConfig: []byte(`{}`),
+			Timestamp:       time.Now(),
+			Timeout:         valid_timeout,
 		}
 
 		clusters_2 = &models.Cluster{
@@ -100,6 +110,8 @@ var _ = Describe("Cluster", func() {
 			Outputs:         []byte(`{}`),
 			TerraformState:  []byte(`{}`),
 			TerraformConfig: []byte(`{}`),
+			Timestamp:       time.Now(),
+			Timeout:         valid_timeout,
 		}
 
 		valid_terraform_config = []byte(`{"provider":{"google":{}}}`)
@@ -127,7 +139,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				cluster, err = dao.CreateCluster(valid_db, valid_terraform_config, valid_request_id)
+				cluster, err = dao.CreateCluster(valid_db, valid_terraform_config, valid_timeout, valid_request_id)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -147,11 +159,29 @@ var _ = Describe("Cluster", func() {
 			It("Should use the request id for the cluster id", func() {
 				Expect(cluster.Id).To(Equal(valid_request_id))
 			})
+			It("Should have a timestamp", func() {
+				Expect(cluster.Timestamp).NotTo(BeNil())
+			})
+			It("Should have a timeout", func() {
+				Expect(cluster.Timeout).NotTo(BeNil())
+			})
 		})
 
 		Context("Without terraform configuration", func() {
 			BeforeEach(func() {
-				cluster, err = dao.CreateCluster(valid_db, nil, valid_request_id)
+				cluster, err = dao.CreateCluster(valid_db, nil, valid_timeout, valid_request_id)
+			})
+			It("Should error", func() {
+				Expect(err).To(HaveOccurred())
+			})
+			It("Should not return a cluster", func() {
+				Expect(cluster).To(BeNil())
+			})
+		})
+
+		Context("Without a timeout", func() {
+			BeforeEach(func() {
+				cluster, err = dao.CreateCluster(valid_db, valid_terraform_config, "", valid_request_id)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -163,7 +193,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("Without a request id", func() {
 			BeforeEach(func() {
-				cluster, err = dao.CreateCluster(valid_db, valid_terraform_config, "")
+				cluster, err = dao.CreateCluster(valid_db, valid_terraform_config, valid_timeout, "")
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -175,7 +205,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("When then database transaction cannot be created", func() {
 			BeforeEach(func() {
-				cluster, err = dao.CreateCluster(invalid_db, nil, valid_request_id)
+				cluster, err = dao.CreateCluster(invalid_db, nil, valid_timeout, valid_request_id)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -456,6 +486,43 @@ var _ = Describe("Cluster", func() {
 			})
 		})
 
+		Context("When updating the timeout field", func() {
+			BeforeEach(func() {
+				seed_err := seedDatabaseWithCluster(clusters_1)
+				Expect(seed_err).NotTo(HaveOccurred())
+				err = dao.UpdateClusterField(valid_db, clusters_1.Id, "timeout", "10h", valid_request_id)
+			})
+			It("Should not error", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+			It("Should have been updated for the cluster saved", func() {
+				// In order to use sqlx scanning, cluster needs to be empty struct
+				cluster := models.Cluster{}
+				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", clusters_1.Id)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cluster.Timeout).To(Equal("10h"))
+			})
+		})
+
+		Context("When updating the timestamp field", func() {
+			BeforeEach(func() {
+				seed_err := seedDatabaseWithCluster(clusters_1)
+				Expect(seed_err).NotTo(HaveOccurred())
+				new_timestamp = time.Now()
+				err = dao.UpdateClusterField(valid_db, clusters_1.Id, "timestamp", new_timestamp, valid_request_id)
+			})
+			It("Should error", func() {
+				Expect(err).To(HaveOccurred())
+			})
+			It("Should not have been updated for the cluster saved", func() {
+				// In order to use sqlx scanning, cluster needs to be empty struct
+				cluster := models.Cluster{}
+				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", clusters_1.Id)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cluster.Timestamp).NotTo(Equal(new_timestamp))
+			})
+		})
+
 		Context("When updating a field that does not exist", func() {
 			BeforeEach(func() {
 				seed_err := seedDatabaseWithCluster(clusters_1)
@@ -510,6 +577,17 @@ var _ = Describe("Cluster", func() {
 })
 
 func seedDatabaseWithCluster(cluster *models.Cluster) error {
-	_, err := valid_db.NamedExec(`INSERT INTO clusters VALUES (:id, :name, :status, :message, :outputs, :terraform_config, :terraform_state)`, cluster)
+	sql := `INSERT INTO clusters VALUES (
+		:id, 
+		:name, 
+		:status, 
+		:message, 
+		:outputs, 
+		:terraform_config, 
+		:terraform_state, 
+		:timestamp, 
+		:timeout
+	)`
+	_, err := valid_db.NamedExec(sql, cluster)
 	return err
 }

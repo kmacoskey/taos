@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/davecgh/go-spew/spew"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -75,13 +74,7 @@ func (client *Client) Version() (string, error) {
 //  allow for terraform commands.
 // Nothing is done if the Config content is empty
 func (client *Client) ClientInit() error {
-	logger := log.WithFields(log.Fields{
-		"topic":   "taos",
-		"package": "terraform",
-		"event":   "client_init",
-	})
-
-	logger.Debug("initalizing terraform client")
+	// logger := log.WithFields(log.Fields{"package": "terraform", "event": "client_init"})
 
 	if len(client.Terraform.Config) <= 0 {
 		return fmt.Errorf(ErrorMissingConfig)
@@ -120,8 +113,6 @@ func (client *Client) ClientInit() error {
 			return err
 		}
 	}
-
-	logger.Debug(spew.Sdump(client.Terraform))
 
 	return nil
 }
@@ -256,11 +247,7 @@ func (client *Client) Destroy() ([]byte, string, error) {
 }
 
 func (client *Client) Outputs() (string, error) {
-	logger := log.WithFields(log.Fields{
-		"topic":   "taos",
-		"package": "terraform",
-		"event":   "terraform_outputs",
-	})
+	logger := log.WithFields(log.Fields{"package": "terraform", "event": "terraform_outputs"})
 
 	_, err := client.Init()
 	if err != nil {

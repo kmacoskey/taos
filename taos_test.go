@@ -35,7 +35,7 @@ var _ = Describe("Taos", func() {
 	)
 
 	BeforeSuite(func() {
-		valid_terraform_config = []byte(`{"provider":{"google":{"project":"data-gp-toolsmiths","region":"us-central1"}},"output":{"foo":{"value":"bar"}}}`)
+		valid_terraform_config = []byte(`{"config":"{\"provider\":{\"google\":{\"project\":\"data-gp-toolsmiths\",\"region\":\"us-central1\"}},\"output\":{\"foo\":{\"value\":\"bar\"}}}","timeout":"10m"}`)
 		expected_terraform_outputs = make(map[string]handlers.TerraformOutput)
 		expected_terraform_outputs["foo"] = handlers.TerraformOutput{
 			Sensitive: false,

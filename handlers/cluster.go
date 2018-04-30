@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"bytes"
+	"encoding/gob"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
@@ -59,6 +61,16 @@ func ServeClusterResources(router *mux.Router, db *sqlx.DB) {
 	)).Methods("DELETE")
 }
 
+func getBytes(data interface{}) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	err := enc.Encode(data)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
 func (ch *ClusterHandler) CreateCluster() app.Adapter {
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -83,7 +95,15 @@ func (ch *ClusterHandler) CreateCluster() app.Adapter {
 				return
 			}
 
-			context.SetTerraformConfig(body)
+			cluster_request := ClusterRequest{}
+			err = json.Unmarshal(body, &cluster_request)
+			if err != nil {
+				logger.Error(err)
+				return
+			}
+
+			context.SetTerraformConfig([]byte(cluster_request.TerraformConfig))
+			context.SetTimeout(cluster_request.Timeout)
 
 			cluster, err := ch.service.CreateCluster(context, terraform.NewTerraformClient())
 
