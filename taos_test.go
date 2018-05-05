@@ -103,7 +103,7 @@ var _ = Describe("Taos", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					return eventual_cluster_response_json.Data.Attributes.Status
-				}, 30, .5).Should(Equal(models.ClusterStatusProvisionSuccess))
+				}, 40, .5).Should(Equal(models.ClusterStatusProvisionSuccess))
 			})
 			It("Should eventually set the message", func() {
 				Eventually(func() string {
@@ -115,7 +115,7 @@ var _ = Describe("Taos", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					return eventual_cluster_response_json.Data.Attributes.Message
-				}, 30, .5).Should(ContainSubstring(terraform.ApplySuccess))
+				}, 40, .5).Should(ContainSubstring(terraform.ApplySuccess))
 			})
 			It("Should eventually set the outputs", func() {
 				Eventually(func() map[string]handlers.TerraformOutput {
@@ -127,7 +127,7 @@ var _ = Describe("Taos", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					return eventual_cluster_response_json.Data.Attributes.TerraformOutputs
-				}, 30, .5).Should(Equal(expected_terraform_outputs))
+				}, 40, .5).Should(Equal(expected_terraform_outputs))
 			})
 
 		})
@@ -150,7 +150,7 @@ var _ = Describe("Taos", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				cluster_id = temp_cluster_response_json.Data.Attributes.Id
-				time.Sleep(30 * time.Second)
+				time.Sleep(40 * time.Second)
 
 				response, body = httpClusterRequest("DELETE", fmt.Sprintf("http://localhost:8080/cluster/%s", cluster_id), nil)
 				cluster_response_json = &handlers.ClusterResponse{}
@@ -175,7 +175,7 @@ var _ = Describe("Taos", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					return eventual_cluster_response_json.Data.Attributes.Status
-				}, 30, .5).Should(Equal(models.ClusterStatusDestroyed))
+				}, 40, .5).Should(Equal(models.ClusterStatusDestroyed))
 			})
 		})
 	})

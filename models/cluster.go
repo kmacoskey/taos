@@ -13,6 +13,7 @@ type Cluster struct {
 	TerraformConfig []byte    `json:"terraform_config" db:"terraform_config"`
 	TerraformState  []byte    `json:"terraform_state" db:"terraform_state"`
 	Timestamp       time.Time `json:"timestamp" db:"timestamp"`
+	Expiration      time.Time `json:"expiration" db:"expiration"`
 	Timeout         string    `json:"timeout" db:"timeout"`
 }
 

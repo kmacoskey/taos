@@ -30,6 +30,7 @@ var (
 				terraform_state 	json,
 				terraform_config 	json,
 				timestamp 				timestamp,
+				expiration 				timestamp,
 				timeout           text
 		)`
 	truncate_clusters = `TRUNCATE TABLE clusters`
@@ -71,8 +72,10 @@ var _ = Describe("Cluster", func() {
 
 	var (
 		cluster                *models.Cluster
-		clusters_1             *models.Cluster
-		clusters_2             *models.Cluster
+		cluster_1              *models.Cluster
+		cluster_2              *models.Cluster
+		expired_cluster        *models.Cluster
+		not_expired_cluster    *models.Cluster
 		valid_request_id       string
 		valid_timeout          string
 		new_timestamp          time.Time
@@ -90,7 +93,7 @@ var _ = Describe("Cluster", func() {
 
 		valid_timeout = "10m"
 
-		clusters_1 = &models.Cluster{
+		cluster_1 = &models.Cluster{
 			Id:              "a19e2758-0ec5-11e8-ba89-0ed5f89f718b",
 			Name:            "cluster_1",
 			Status:          "provisioned",
@@ -102,7 +105,7 @@ var _ = Describe("Cluster", func() {
 			Timeout:         valid_timeout,
 		}
 
-		clusters_2 = &models.Cluster{
+		cluster_2 = &models.Cluster{
 			Id:              "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b",
 			Name:            "cluster_2",
 			Status:          "provisioned",
@@ -115,6 +118,22 @@ var _ = Describe("Cluster", func() {
 		}
 
 		valid_terraform_config = []byte(`{"provider":{"google":{}}}`)
+
+		// Not expired
+		not_expired_cluster = cluster_1
+		not_expired_cluster.Timeout = "240h"
+		not_expired_cluster.Timestamp = time.Now()
+		expiration, time_err := time.ParseDuration(not_expired_cluster.Timeout)
+		Expect(time_err).NotTo(HaveOccurred())
+		not_expired_cluster.Expiration = not_expired_cluster.Timestamp.Add(time.Duration(expiration))
+
+		// Expired
+		expired_cluster = cluster_2
+		expired_cluster.Timeout = "10m"
+		expired_cluster.Timestamp = time.Now().Add(-15 * time.Minute)
+		expiration, time_err = time.ParseDuration(expired_cluster.Timeout)
+		Expect(time_err).NotTo(HaveOccurred())
+		expired_cluster.Expiration = expired_cluster.Timestamp.Add(time.Duration(expiration))
 
 		// Create a fresh transaction for each test
 		tx, err = valid_db.Beginx()
@@ -164,6 +183,15 @@ var _ = Describe("Cluster", func() {
 			})
 			It("Should have a timeout", func() {
 				Expect(cluster.Timeout).NotTo(BeNil())
+			})
+			It("Should have an accurate expiration", func() {
+				Expect(cluster.Expiration).NotTo(BeNil())
+				// The cluster should expire at creation+timeout
+				duration, err := time.ParseDuration(cluster.Timeout)
+				Expect(err).NotTo(HaveOccurred())
+				expiration_time := cluster.Timestamp.Add(duration)
+				Expect(cluster.Timestamp).NotTo(BeNil())
+				Expect(cluster.Expiration).To(Equal(expiration_time))
 			})
 		})
 
@@ -231,9 +259,9 @@ var _ = Describe("Cluster", func() {
 
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				seed_err := seedDatabaseWithCluster(clusters_1)
+				seed_err := seedDatabaseWithCluster(cluster_1)
 				Expect(seed_err).NotTo(HaveOccurred())
-				cluster, err = dao.GetCluster(valid_db, clusters_1.Id, valid_request_id)
+				cluster, err = dao.GetCluster(valid_db, cluster_1.Id, valid_request_id)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -242,14 +270,14 @@ var _ = Describe("Cluster", func() {
 				Expect(cluster).NotTo(BeNil())
 			})
 			It("Should return the expected cluster", func() {
-				Expect(cluster.Id).To(Equal(clusters_1.Id))
+				Expect(cluster.Id).To(Equal(cluster_1.Id))
 			})
 		})
 
 		Context("When the cluster does not exist", func() {
 			BeforeEach(func() {
 				// Without inserting any clusters into database
-				cluster, err = dao.GetCluster(valid_db, clusters_1.Id, valid_request_id)
+				cluster, err = dao.GetCluster(valid_db, cluster_1.Id, valid_request_id)
 			})
 			It("should error", func() {
 				Expect(err).Should(HaveOccurred())
@@ -273,7 +301,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("Without a request id", func() {
 			BeforeEach(func() {
-				cluster, err = dao.GetCluster(valid_db, clusters_1.Id, "")
+				cluster, err = dao.GetCluster(valid_db, cluster_1.Id, "")
 			})
 			It("should error", func() {
 				Expect(err).Should(HaveOccurred())
@@ -285,7 +313,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("When then database transaction cannot be created", func() {
 			BeforeEach(func() {
-				cluster, err = dao.GetCluster(invalid_db, clusters_1.Id, valid_request_id)
+				cluster, err = dao.GetCluster(invalid_db, cluster_1.Id, valid_request_id)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -310,9 +338,9 @@ var _ = Describe("Cluster", func() {
 	Describe("Retrieving clusters", func() {
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				seed_err := seedDatabaseWithCluster(clusters_1)
+				seed_err := seedDatabaseWithCluster(cluster_1)
 				Expect(seed_err).NotTo(HaveOccurred())
-				seed_err = seedDatabaseWithCluster(clusters_2)
+				seed_err = seedDatabaseWithCluster(cluster_2)
 				Expect(seed_err).NotTo(HaveOccurred())
 				clusters, err = dao.GetClusters(valid_db, valid_request_id)
 			})
@@ -324,8 +352,8 @@ var _ = Describe("Cluster", func() {
 			})
 			It("Should return the expected clusters", func() {
 				Expect(clusters).To(HaveLen(2))
-				Expect(clusters[0].Id).To(Equal(clusters_1.Id))
-				Expect(clusters[1].Id).To(Equal(clusters_2.Id))
+				Expect(clusters[0].Id).To(Equal(cluster_1.Id))
+				Expect(clusters[1].Id).To(Equal(cluster_2.Id))
 			})
 		})
 
@@ -380,9 +408,9 @@ var _ = Describe("Cluster", func() {
 	Describe("Updating a clusters status", func() {
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				seed_err := seedDatabaseWithCluster(clusters_1)
+				seed_err := seedDatabaseWithCluster(cluster_1)
 				Expect(seed_err).NotTo(HaveOccurred())
-				err = dao.UpdateClusterField(valid_db, clusters_1.Id, "status", "different_status", valid_request_id)
+				err = dao.UpdateClusterField(valid_db, cluster_1.Id, "status", "different_status", valid_request_id)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -390,7 +418,7 @@ var _ = Describe("Cluster", func() {
 			It("Should have been updated for the cluster saved", func() {
 				// In order to use sqlx scanning, cluster needs to be empty struct
 				cluster := models.Cluster{}
-				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", clusters_1.Id)
+				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", cluster_1.Id)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cluster.Status).To(Equal("different_status"))
 			})
@@ -398,9 +426,9 @@ var _ = Describe("Cluster", func() {
 
 		Context("When updating the status field", func() {
 			BeforeEach(func() {
-				seed_err := seedDatabaseWithCluster(clusters_1)
+				seed_err := seedDatabaseWithCluster(cluster_1)
 				Expect(seed_err).NotTo(HaveOccurred())
-				err = dao.UpdateClusterField(valid_db, clusters_1.Id, "status", "different_status", valid_request_id)
+				err = dao.UpdateClusterField(valid_db, cluster_1.Id, "status", "different_status", valid_request_id)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -408,7 +436,7 @@ var _ = Describe("Cluster", func() {
 			It("Should have been updated for the cluster saved", func() {
 				// In order to use sqlx scanning, cluster needs to be empty struct
 				cluster := models.Cluster{}
-				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", clusters_1.Id)
+				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", cluster_1.Id)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cluster.Status).To(Equal("different_status"))
 			})
@@ -416,9 +444,9 @@ var _ = Describe("Cluster", func() {
 
 		Context("When updating the message field", func() {
 			BeforeEach(func() {
-				seed_err := seedDatabaseWithCluster(clusters_1)
+				seed_err := seedDatabaseWithCluster(cluster_1)
 				Expect(seed_err).NotTo(HaveOccurred())
-				err = dao.UpdateClusterField(valid_db, clusters_1.Id, "message", "different_message", valid_request_id)
+				err = dao.UpdateClusterField(valid_db, cluster_1.Id, "message", "different_message", valid_request_id)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -426,7 +454,7 @@ var _ = Describe("Cluster", func() {
 			It("Should have been updated for the cluster saved", func() {
 				// In order to use sqlx scanning, cluster needs to be empty struct
 				cluster := models.Cluster{}
-				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", clusters_1.Id)
+				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", cluster_1.Id)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cluster.Message).To(Equal("different_message"))
 			})
@@ -434,9 +462,9 @@ var _ = Describe("Cluster", func() {
 
 		Context("When updating the outputs field", func() {
 			BeforeEach(func() {
-				seed_err := seedDatabaseWithCluster(clusters_1)
+				seed_err := seedDatabaseWithCluster(cluster_1)
 				Expect(seed_err).NotTo(HaveOccurred())
-				err = dao.UpdateClusterField(valid_db, clusters_1.Id, "outputs", []byte(`{"outputs":{}}`), valid_request_id)
+				err = dao.UpdateClusterField(valid_db, cluster_1.Id, "outputs", []byte(`{"outputs":{}}`), valid_request_id)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -444,7 +472,7 @@ var _ = Describe("Cluster", func() {
 			It("Should have been updated for the cluster saved", func() {
 				// In order to use sqlx scanning, cluster needs to be empty struct
 				cluster := models.Cluster{}
-				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", clusters_1.Id)
+				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", cluster_1.Id)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cluster.Outputs).To(Equal([]byte(`{"outputs":{}}`)))
 			})
@@ -452,9 +480,9 @@ var _ = Describe("Cluster", func() {
 
 		Context("When updating the terraform_config field", func() {
 			BeforeEach(func() {
-				seed_err := seedDatabaseWithCluster(clusters_1)
+				seed_err := seedDatabaseWithCluster(cluster_1)
 				Expect(seed_err).NotTo(HaveOccurred())
-				err = dao.UpdateClusterField(valid_db, clusters_1.Id, "terraform_config", []byte(`{"config":{}}`), valid_request_id)
+				err = dao.UpdateClusterField(valid_db, cluster_1.Id, "terraform_config", []byte(`{"config":{}}`), valid_request_id)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -462,7 +490,7 @@ var _ = Describe("Cluster", func() {
 			It("Should have been updated for the cluster saved", func() {
 				// In order to use sqlx scanning, cluster needs to be empty struct
 				cluster := models.Cluster{}
-				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", clusters_1.Id)
+				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", cluster_1.Id)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cluster.TerraformConfig).To(Equal([]byte(`{"config":{}}`)))
 			})
@@ -470,9 +498,9 @@ var _ = Describe("Cluster", func() {
 
 		Context("When updating the terraform_state field", func() {
 			BeforeEach(func() {
-				seed_err := seedDatabaseWithCluster(clusters_1)
+				seed_err := seedDatabaseWithCluster(cluster_1)
 				Expect(seed_err).NotTo(HaveOccurred())
-				err = dao.UpdateClusterField(valid_db, clusters_1.Id, "terraform_state", []byte(`{"state":{}}`), valid_request_id)
+				err = dao.UpdateClusterField(valid_db, cluster_1.Id, "terraform_state", []byte(`{"state":{}}`), valid_request_id)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -480,7 +508,7 @@ var _ = Describe("Cluster", func() {
 			It("Should have been updated for the cluster saved", func() {
 				// In order to use sqlx scanning, cluster needs to be empty struct
 				cluster := models.Cluster{}
-				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", clusters_1.Id)
+				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", cluster_1.Id)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cluster.TerraformState).To(Equal([]byte(`{"state":{}}`)))
 			})
@@ -488,9 +516,9 @@ var _ = Describe("Cluster", func() {
 
 		Context("When updating the timeout field", func() {
 			BeforeEach(func() {
-				seed_err := seedDatabaseWithCluster(clusters_1)
+				seed_err := seedDatabaseWithCluster(cluster_1)
 				Expect(seed_err).NotTo(HaveOccurred())
-				err = dao.UpdateClusterField(valid_db, clusters_1.Id, "timeout", "10h", valid_request_id)
+				err = dao.UpdateClusterField(valid_db, cluster_1.Id, "timeout", "10h", valid_request_id)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -498,7 +526,7 @@ var _ = Describe("Cluster", func() {
 			It("Should have been updated for the cluster saved", func() {
 				// In order to use sqlx scanning, cluster needs to be empty struct
 				cluster := models.Cluster{}
-				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", clusters_1.Id)
+				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", cluster_1.Id)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cluster.Timeout).To(Equal("10h"))
 			})
@@ -506,10 +534,10 @@ var _ = Describe("Cluster", func() {
 
 		Context("When updating the timestamp field", func() {
 			BeforeEach(func() {
-				seed_err := seedDatabaseWithCluster(clusters_1)
+				seed_err := seedDatabaseWithCluster(cluster_1)
 				Expect(seed_err).NotTo(HaveOccurred())
 				new_timestamp = time.Now()
-				err = dao.UpdateClusterField(valid_db, clusters_1.Id, "timestamp", new_timestamp, valid_request_id)
+				err = dao.UpdateClusterField(valid_db, cluster_1.Id, "timestamp", new_timestamp, valid_request_id)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -517,7 +545,7 @@ var _ = Describe("Cluster", func() {
 			It("Should not have been updated for the cluster saved", func() {
 				// In order to use sqlx scanning, cluster needs to be empty struct
 				cluster := models.Cluster{}
-				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", clusters_1.Id)
+				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", cluster_1.Id)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(cluster.Timestamp).NotTo(Equal(new_timestamp))
 			})
@@ -525,9 +553,9 @@ var _ = Describe("Cluster", func() {
 
 		Context("When updating a field that does not exist", func() {
 			BeforeEach(func() {
-				seed_err := seedDatabaseWithCluster(clusters_1)
+				seed_err := seedDatabaseWithCluster(cluster_1)
 				Expect(seed_err).NotTo(HaveOccurred())
-				err = dao.UpdateClusterField(valid_db, clusters_1.Id, "not-a-field", "", valid_request_id)
+				err = dao.UpdateClusterField(valid_db, cluster_1.Id, "not-a-field", "", valid_request_id)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -536,9 +564,9 @@ var _ = Describe("Cluster", func() {
 
 		Context("When updating a field with the wrong type", func() {
 			BeforeEach(func() {
-				seed_err := seedDatabaseWithCluster(clusters_1)
+				seed_err := seedDatabaseWithCluster(cluster_1)
 				Expect(seed_err).NotTo(HaveOccurred())
-				err = dao.UpdateClusterField(valid_db, clusters_1.Id, "terraform_config", "not-a-byte-slice", valid_request_id)
+				err = dao.UpdateClusterField(valid_db, cluster_1.Id, "terraform_config", "not-a-byte-slice", valid_request_id)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -547,9 +575,9 @@ var _ = Describe("Cluster", func() {
 
 		Context("When nothing is different", func() {
 			BeforeEach(func() {
-				seed_err := seedDatabaseWithCluster(clusters_1)
+				seed_err := seedDatabaseWithCluster(cluster_1)
 				Expect(seed_err).NotTo(HaveOccurred())
-				err = dao.UpdateClusterField(valid_db, clusters_1.Id, "status", clusters_1.Status, valid_request_id)
+				err = dao.UpdateClusterField(valid_db, cluster_1.Id, "status", cluster_1.Status, valid_request_id)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -557,18 +585,101 @@ var _ = Describe("Cluster", func() {
 			It("Should not change the field", func() {
 				// In order to use sqlx scanning, cluster needs to be empty struct
 				cluster := models.Cluster{}
-				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", clusters_1.Id)
+				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", cluster_1.Id)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(cluster.Status).To(Equal(clusters_1.Status))
+				Expect(cluster.Status).To(Equal(cluster_1.Status))
 			})
 		})
 
 		Context("When the cluster does not exist", func() {
 			BeforeEach(func() {
-				err = dao.UpdateClusterField(valid_db, clusters_1.Id, "status", clusters_1.Status, valid_request_id)
+				err = dao.UpdateClusterField(valid_db, cluster_1.Id, "status", cluster_1.Status, valid_request_id)
 			})
 			It("should error", func() {
 				Expect(err).Should(HaveOccurred())
+			})
+		})
+
+	})
+
+	// ======================================================================
+	//             _                     _              _
+	//   __ _  ___| |_    _____  ___ __ (_)_ __ ___  __| |
+	//  / _` |/ _ \ __|  / _ \ \/ / '_ \| | '__/ _ \/ _` |
+	// | (_| |  __/ |_  |  __/>  <| |_) | | | |  __/ (_| |
+	//  \__, |\___|\__|  \___/_/\_\ .__/|_|_|  \___|\__,_|
+	//  |___/                     |_|
+	//
+	// ======================================================================
+
+	// Clusters are past their expiration when time.now > (creation.time + timeout)
+	Describe("Getting expired clusters", func() {
+		Context("When everything goes ok", func() {
+			BeforeEach(func() {
+				seed_err := seedDatabaseWithCluster(expired_cluster)
+				Expect(seed_err).NotTo(HaveOccurred())
+				seed_err = seedDatabaseWithCluster(not_expired_cluster)
+				Expect(seed_err).NotTo(HaveOccurred())
+				clusters, err = dao.GetExpiredClusters(valid_db, valid_request_id)
+			})
+			It("Should not error", func() {
+				Expect(err).ShouldNot(HaveOccurred())
+			})
+			It("Should return the expected cluster(s)", func() {
+				Expect(clusters).To(HaveLen(1))
+				Expect(clusters[0].Id).To(Equal(cluster_2.Id))
+			})
+		})
+
+		Context("When there are no expired clusters", func() {
+			BeforeEach(func() {
+				seed_err := seedDatabaseWithCluster(not_expired_cluster)
+				Expect(seed_err).NotTo(HaveOccurred())
+				seed_err = seedDatabaseWithCluster(not_expired_cluster)
+				Expect(seed_err).NotTo(HaveOccurred())
+				clusters, err = dao.GetExpiredClusters(valid_db, valid_request_id)
+			})
+			It("Should not error", func() {
+				Expect(err).ShouldNot(HaveOccurred())
+			})
+			It("Should return no cluster(s)", func() {
+				Expect(clusters).To(HaveLen(0))
+			})
+		})
+
+		Context("When there are no clusters", func() {
+			BeforeEach(func() {
+				clusters, err = dao.GetExpiredClusters(valid_db, valid_request_id)
+			})
+			It("Should not error", func() {
+				Expect(err).ShouldNot(HaveOccurred())
+			})
+			It("Should return no cluster(s)", func() {
+				Expect(clusters).To(HaveLen(0))
+			})
+		})
+
+		Context("When then database transaction cannot be created", func() {
+			BeforeEach(func() {
+				clusters, err = dao.GetExpiredClusters(invalid_db, valid_request_id)
+			})
+			It("Should error", func() {
+				Expect(err).To(HaveOccurred())
+			})
+			It("Should return no cluster(s)", func() {
+				Expect(clusters).To(HaveLen(0))
+			})
+		})
+
+		Context("Without a request id", func() {
+			BeforeEach(func() {
+				clusters, err = dao.GetExpiredClusters(valid_db, "")
+			})
+			It("should error", func() {
+				Expect(err).Should(HaveOccurred())
+			})
+			It("Should return no cluster(s)", func() {
+				Expect(clusters).To(HaveLen(0))
 			})
 		})
 
@@ -586,6 +697,7 @@ func seedDatabaseWithCluster(cluster *models.Cluster) error {
 		:terraform_config, 
 		:terraform_state, 
 		:timestamp, 
+		:expiration,
 		:timeout
 	)`
 	_, err := valid_db.NamedExec(sql, cluster)

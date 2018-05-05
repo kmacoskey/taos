@@ -32,13 +32,23 @@ func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, timeout string,
 		return nil, err
 	}
 
+	timeout_duration, err := time.ParseDuration(timeout)
+	if err != nil {
+		err := errors.New("cannot create cluster without valid timeout")
+		logger.Error(err)
+		return nil, err
+	}
+
+	creation_time := time.Now()
+
 	cluster := models.Cluster{
 		Id:              requestId,
 		Name:            sillyname.GenerateStupidName(),
 		Status:          models.ClusterStatusRequested,
 		Message:         "",
 		TerraformConfig: config,
-		Timestamp:       time.Now(),
+		Timestamp:       creation_time,
+		Expiration:      creation_time.Add(timeout_duration),
 		Timeout:         timeout,
 	}
 
@@ -130,6 +140,47 @@ func (dao *ClusterDao) GetClusters(db *sqlx.DB, requestId string) ([]models.Clus
 
 	sql := `SELECT * FROM clusters`
 	rows, err := tx.Queryx(sql)
+	if err != nil {
+		tx.Rollback()
+		logger.Error(err.Error())
+		return nil, err
+	}
+	defer rows.Close()
+
+	clusters := []models.Cluster{}
+	cluster := models.Cluster{}
+
+	for rows.Next() {
+		err := rows.StructScan(&cluster)
+		if err != nil {
+			logger.Error(err)
+			return nil, err
+		}
+		clusters = append(clusters, cluster)
+	}
+
+	tx.Commit()
+
+	return clusters, nil
+}
+
+func (dao *ClusterDao) GetExpiredClusters(db *sqlx.DB, requestId string) ([]models.Cluster, error) {
+	logger := log.WithFields(log.Fields{"package": "daos", "event": "get_expired_clusters", "request": requestId})
+
+	if len(requestId) == 0 {
+		err := errors.New("cannot get cluster without requestId")
+		logger.Error(err)
+		return nil, err
+	}
+
+	tx, err := db.Beginx()
+	if err != nil {
+		logger.Error(err.Error())
+		return nil, err
+	}
+
+	sql := `SELECT * FROM clusters WHERE expiration < $1`
+	rows, err := tx.Queryx(sql, time.Now())
 	if err != nil {
 		tx.Rollback()
 		logger.Error(err.Error())
