@@ -30,6 +30,7 @@ var _ = Describe("Cluster", func() {
 		cluster2UUID                  string
 		cluster2                      *models.Cluster
 		clusters                      []models.Cluster
+		validRequestId                string
 		cs                            *ClusterService
 		rc                            app.RequestContext
 		err                           error
@@ -65,6 +66,8 @@ var _ = Describe("Cluster", func() {
 			Status:          "status",
 			TerraformConfig: []byte(`{"provider":{"google":{}}}`),
 		}
+
+		validRequestId = "ff459ef4-514b-11e8-9c2d-fa7ae01bbebc"
 	})
 
 	// ======================================================================
@@ -81,10 +84,8 @@ var _ = Describe("Cluster", func() {
 			BeforeEach(func() {
 				clustersMap := make(map[string]*models.Cluster)
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
-				rc.SetTerraformConfig(validTerraformConfig)
-				rc.SetTimeout(validTimeout)
 				client := new(PassingClient)
-				cluster, err = cs.CreateCluster(rc, client)
+				cluster, err = cs.CreateCluster(validTerraformConfig, validTimeout, validRequestId, client)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -98,7 +99,7 @@ var _ = Describe("Cluster", func() {
 			BeforeEach(func() {
 				cs = NewClusterService(NewEmptyClusterDao(), NewMockDB().db)
 				client := new(FailingClient)
-				cluster, err = cs.CreateCluster(rc, client)
+				cluster, err = cs.CreateCluster(validTerraformConfig, validTimeout, validRequestId, client)
 			})
 			It("Should error", func() {
 				Expect(err).Should(HaveOccurred())
@@ -112,9 +113,8 @@ var _ = Describe("Cluster", func() {
 			BeforeEach(func() {
 				clustersMap := make(map[string]*models.Cluster)
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
-				rc.SetTerraformConfig(invalidTerraformConfig)
 				client := new(PassingClient)
-				cluster, err = cs.CreateCluster(rc, client)
+				cluster, err = cs.CreateCluster(invalidTerraformConfig, validTimeout, validRequestId, client)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -128,9 +128,8 @@ var _ = Describe("Cluster", func() {
 			BeforeEach(func() {
 				clustersMap := make(map[string]*models.Cluster)
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
-				rc.SetTerraformConfig(validNoOutputsTerraformConfig)
 				client := new(FailingClient)
-				cluster, err = cs.CreateCluster(rc, client)
+				cluster, err = cs.CreateCluster(validNoOutputsTerraformConfig, validTimeout, validRequestId, client)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -186,7 +185,7 @@ var _ = Describe("Cluster", func() {
 				clustersMap := make(map[string]*models.Cluster)
 				clustersMap[cluster1.Id] = cluster1
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
-				cluster, err = cs.GetCluster(rc, cluster1.Id)
+				cluster, err = cs.GetCluster(validRequestId, cluster1.Id)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -202,7 +201,7 @@ var _ = Describe("Cluster", func() {
 		Context("When the cluster does not exist", func() {
 			BeforeEach(func() {
 				cs = NewClusterService(NewEmptyClusterDao(), NewMockDB().db)
-				cluster, err = cs.GetCluster(rc, cluster1.Id)
+				cluster, err = cs.GetCluster(validRequestId, cluster1.Id)
 			})
 			It("Should error", func() {
 				Expect(err).Should(HaveOccurred())
@@ -230,7 +229,7 @@ var _ = Describe("Cluster", func() {
 				clustersMap[cluster1.Id] = cluster1
 				clustersMap[cluster2.Id] = cluster2
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
-				clusters, err = cs.GetClusters(rc)
+				clusters, err = cs.GetClusters(validRequestId)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -247,7 +246,7 @@ var _ = Describe("Cluster", func() {
 		Context("When there are no clusters", func() {
 			BeforeEach(func() {
 				cs = NewClusterService(NewEmptyClusterDao(), NewMockDB().db)
-				clusters, err = cs.GetClusters(rc)
+				clusters, err = cs.GetClusters(validRequestId)
 			})
 			It("should not error", func() {
 				Expect(err).ShouldNot(HaveOccurred())
@@ -276,7 +275,7 @@ var _ = Describe("Cluster", func() {
 				clustersMap[cluster1UUID] = cluster1
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
 				client := new(PassingClient)
-				cluster, err = cs.DeleteCluster(rc, client, cluster1UUID)
+				cluster, err = cs.DeleteCluster(validRequestId, client, cluster1UUID)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -294,7 +293,7 @@ var _ = Describe("Cluster", func() {
 				clustersMap := make(map[string]*models.Cluster)
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
 				client := new(PassingClient)
-				cluster, err = cs.DeleteCluster(rc, client, cluster1.Id)
+				cluster, err = cs.DeleteCluster(validRequestId, client, cluster1.Id)
 			})
 			It("should error", func() {
 				Expect(err).Should(HaveOccurred())
@@ -311,7 +310,7 @@ var _ = Describe("Cluster", func() {
 				clustersMap[cluster1.Id] = cluster1
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
 				client := new(PassingClient)
-				cluster, err = cs.DeleteCluster(rc, client, cluster1.Id)
+				cluster, err = cs.DeleteCluster(validRequestId, client, cluster1.Id)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -414,6 +413,14 @@ func (dao *ValidClusterDao) GetClusters(db *sqlx.DB, requestId string) ([]models
 	return clusters, nil
 }
 
+func (dao *ValidClusterDao) GetExpiredClusters(db *sqlx.DB, requestId string) ([]models.Cluster, error) {
+	clusters := []models.Cluster{}
+	for _, cluster := range dao.clustersMap {
+		clusters = append(clusters, *cluster)
+	}
+	return clusters, nil
+}
+
 func (dao *ValidClusterDao) DeleteCluster(db *sqlx.DB, id string, requestId string) (*models.Cluster, error) {
 	if _, ok := dao.clustersMap[id]; !ok {
 		return nil, errors.New("foo")
@@ -444,6 +451,11 @@ func (dao *EmptyClusterDao) GetCluster(db *sqlx.DB, id string, requestId string)
 }
 
 func (dao *EmptyClusterDao) GetClusters(db *sqlx.DB, requestId string) ([]models.Cluster, error) {
+	clusters := []models.Cluster{}
+	return clusters, nil
+}
+
+func (dao *EmptyClusterDao) GetExpiredClusters(db *sqlx.DB, requestId string) ([]models.Cluster, error) {
 	clusters := []models.Cluster{}
 	return clusters, nil
 }

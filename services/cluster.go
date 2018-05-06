@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/kmacoskey/taos/app"
 	"github.com/kmacoskey/taos/models"
 	log "github.com/sirupsen/logrus"
 )
@@ -13,6 +12,7 @@ import (
 type clusterDao interface {
 	GetCluster(db *sqlx.DB, id string, requestId string) (*models.Cluster, error)
 	GetClusters(db *sqlx.DB, requestId string) ([]models.Cluster, error)
+	GetExpiredClusters(db *sqlx.DB, requestId string) ([]models.Cluster, error)
 	CreateCluster(db *sqlx.DB, config []byte, timeout string, requestId string) (*models.Cluster, error)
 	UpdateClusterField(db *sqlx.DB, id string, field string, value interface{}, requestId string) error
 }
@@ -40,34 +40,34 @@ func NewClusterService(dao clusterDao, db *sqlx.DB) *ClusterService {
 	return &ClusterService{dao, db}
 }
 
-func (s *ClusterService) GetCluster(context app.RequestContext, id string) (*models.Cluster, error) {
-	cluster, err := s.dao.GetCluster(s.db, id, context.RequestId())
+func (s *ClusterService) GetCluster(request_id string, id string) (*models.Cluster, error) {
+	cluster, err := s.dao.GetCluster(s.db, id, request_id)
 	return cluster, err
 }
 
-func (s *ClusterService) GetClusters(context app.RequestContext) ([]models.Cluster, error) {
-	clusters, err := s.dao.GetClusters(s.db, context.RequestId())
+func (s *ClusterService) GetClusters(request_id string) ([]models.Cluster, error) {
+	clusters, err := s.dao.GetClusters(s.db, request_id)
 	return clusters, err
 }
 
-func (s *ClusterService) CreateCluster(context app.RequestContext, client TerraformClient) (*models.Cluster, error) {
-	cluster, err := s.dao.CreateCluster(s.db, context.TerraformConfig(), context.Timeout(), context.RequestId())
+func (s *ClusterService) CreateCluster(terraform_config []byte, timeout string, request_id string, client TerraformClient) (*models.Cluster, error) {
+	cluster, err := s.dao.CreateCluster(s.db, terraform_config, timeout, request_id)
 	if err != nil {
 		return cluster, err
 	}
 
 	// Cluster with requested action is returned and eventual cluster status
 	//  is handled in the terraform service asynchronously
-	go s.TerraformProvisionCluster(client, cluster, context.TerraformConfig(), context.RequestId())
+	go s.TerraformProvisionCluster(client, cluster, terraform_config, request_id)
 
 	return cluster, err
 }
 
-func (s *ClusterService) DeleteCluster(context app.RequestContext, client TerraformClient, id string) (*models.Cluster, error) {
-	logger := log.WithFields(log.Fields{"package": "services", "event": "delete_cluster", "request": context.RequestId()})
+func (s *ClusterService) DeleteCluster(request_id string, client TerraformClient, id string) (*models.Cluster, error) {
+	logger := log.WithFields(log.Fields{"package": "services", "event": "delete_cluster", "request": request_id})
 
 	// Retrieve the cluster to destroy
-	cluster, err := s.dao.GetCluster(s.db, id, context.RequestId())
+	cluster, err := s.dao.GetCluster(s.db, id, request_id)
 	if err != nil {
 		logger.Error(err.Error())
 		return nil, err
@@ -85,7 +85,7 @@ func (s *ClusterService) DeleteCluster(context app.RequestContext, client Terraf
 	}
 
 	cluster.Status = models.ClusterStatusDestroying
-	err = s.dao.UpdateClusterField(s.db, cluster.Id, "status", models.ClusterStatusDestroying, context.RequestId())
+	err = s.dao.UpdateClusterField(s.db, cluster.Id, "status", models.ClusterStatusDestroying, request_id)
 	if err != nil {
 		logger.Error(err.Error())
 		return cluster, err
@@ -93,7 +93,7 @@ func (s *ClusterService) DeleteCluster(context app.RequestContext, client Terraf
 
 	// Cluster with requested action is returned and eventual cluster status
 	//  is handled in the terraform service asynchronously
-	go s.TerraformDestroyCluster(client, cluster, context.RequestId())
+	go s.TerraformDestroyCluster(client, cluster, request_id)
 
 	return cluster, nil
 }

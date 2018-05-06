@@ -742,16 +742,16 @@ func NewValidClusterService() *ValidClusterService {
 	return &ValidClusterService{}
 }
 
-func (cs *ValidClusterService) CreateCluster(rc app.RequestContext, client services.TerraformClient) (*models.Cluster, error) {
+func (cs *ValidClusterService) CreateCluster(terraform_config []byte, timeout string, request_id string, client services.TerraformClient) (*models.Cluster, error) {
 	cluster1 := &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status", Outputs: outputsBlob}
 	return cluster1, nil
 }
 
-func (cs *ValidClusterService) GetCluster(rc app.RequestContext, id string) (*models.Cluster, error) {
+func (cs *ValidClusterService) GetCluster(request_id string, id string) (*models.Cluster, error) {
 	return &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status", Outputs: outputsBlob}, nil
 }
 
-func (cs *ValidClusterService) GetClusters(rc app.RequestContext) ([]models.Cluster, error) {
+func (cs *ValidClusterService) GetClusters(request_id string) ([]models.Cluster, error) {
 	clusters := []models.Cluster{}
 	cluster1 := models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status", Outputs: outputsBlob}
 	cluster2 := models.Cluster{Id: "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status", Outputs: outputsBlob}
@@ -760,7 +760,7 @@ func (cs *ValidClusterService) GetClusters(rc app.RequestContext) ([]models.Clus
 	return clusters, nil
 }
 
-func (cs *ValidClusterService) DeleteCluster(rc app.RequestContext, client services.TerraformClient, id string) (*models.Cluster, error) {
+func (cs *ValidClusterService) DeleteCluster(request_id string, client services.TerraformClient, id string) (*models.Cluster, error) {
 	cluster1 := models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status", Outputs: outputsBlob}
 	return &cluster1, nil
 }
@@ -774,19 +774,19 @@ func NewEmptyClusterService() *EmptyClusterService {
 	return &EmptyClusterService{}
 }
 
-func (cs *EmptyClusterService) CreateCluster(rc app.RequestContext, client services.TerraformClient) (*models.Cluster, error) {
+func (cs *EmptyClusterService) CreateCluster(terraform_config []byte, timeout string, request_id string, client services.TerraformClient) (*models.Cluster, error) {
 	return nil, nil
 }
 
-func (cs *EmptyClusterService) GetCluster(rc app.RequestContext, id string) (*models.Cluster, error) {
+func (cs *EmptyClusterService) GetCluster(request_id string, id string) (*models.Cluster, error) {
 	return nil, nil
 }
 
-func (cs *EmptyClusterService) GetClusters(rc app.RequestContext) ([]models.Cluster, error) {
+func (cs *EmptyClusterService) GetClusters(request_id string) ([]models.Cluster, error) {
 	return []models.Cluster{}, nil
 }
 
-func (cs *EmptyClusterService) DeleteCluster(rc app.RequestContext, client services.TerraformClient, id string) (*models.Cluster, error) {
+func (cs *EmptyClusterService) DeleteCluster(request_id string, client services.TerraformClient, id string) (*models.Cluster, error) {
 	return nil, nil
 }
 
@@ -799,18 +799,18 @@ func NewErroringClusterService() *ErroringClusterService {
 	return &ErroringClusterService{}
 }
 
-func (cs *ErroringClusterService) CreateCluster(rc app.RequestContext, client services.TerraformClient) (*models.Cluster, error) {
+func (cs *ErroringClusterService) CreateCluster(terraform_config []byte, timeout string, request_id string, client services.TerraformClient) (*models.Cluster, error) {
 	return nil, errors.New("Cluster service error")
 }
 
-func (cs *ErroringClusterService) GetCluster(rc app.RequestContext, id string) (*models.Cluster, error) {
+func (cs *ErroringClusterService) GetCluster(request_id string, id string) (*models.Cluster, error) {
 	return nil, errors.New("Cluster service error")
 }
 
-func (cs *ErroringClusterService) GetClusters(rc app.RequestContext) ([]models.Cluster, error) {
+func (cs *ErroringClusterService) GetClusters(request_id string) ([]models.Cluster, error) {
 	return nil, errors.New("Cluster service error")
 }
 
-func (cs *ErroringClusterService) DeleteCluster(rc app.RequestContext, client services.TerraformClient, id string) (*models.Cluster, error) {
+func (cs *ErroringClusterService) DeleteCluster(request_id string, client services.TerraformClient, id string) (*models.Cluster, error) {
 	return nil, errors.New("Cluster service error")
 }

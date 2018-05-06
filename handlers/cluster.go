@@ -19,10 +19,10 @@ import (
 )
 
 type clusterService interface {
-	GetCluster(rc app.RequestContext, id string) (*models.Cluster, error)
-	GetClusters(rc app.RequestContext) ([]models.Cluster, error)
-	CreateCluster(rc app.RequestContext, client services.TerraformClient) (*models.Cluster, error)
-	DeleteCluster(rc app.RequestContext, client services.TerraformClient, id string) (*models.Cluster, error)
+	GetCluster(request_id string, id string) (*models.Cluster, error)
+	GetClusters(request_id string) ([]models.Cluster, error)
+	CreateCluster(terraform_config []byte, timeout string, request_id string, client services.TerraformClient) (*models.Cluster, error)
+	DeleteCluster(request_id string, client services.TerraformClient, id string) (*models.Cluster, error)
 }
 
 type ClusterHandler struct {
@@ -102,10 +102,7 @@ func (ch *ClusterHandler) CreateCluster() app.Adapter {
 				return
 			}
 
-			context.SetTerraformConfig([]byte(cluster_request.TerraformConfig))
-			context.SetTimeout(cluster_request.Timeout)
-
-			cluster, err := ch.service.CreateCluster(context, terraform.NewTerraformClient())
+			cluster, err := ch.service.CreateCluster([]byte(cluster_request.TerraformConfig), cluster_request.Timeout, context.RequestId(), terraform.NewTerraformClient())
 
 			// Currently no expectation for the situation that
 			// err == nil && cluster == nil
@@ -142,7 +139,7 @@ func (ch *ClusterHandler) GetCluster() app.Adapter {
 				return
 			}
 
-			cluster, err := ch.service.GetCluster(context, id)
+			cluster, err := ch.service.GetCluster(context.RequestId(), id)
 			if err != nil {
 				response := ErrorResponseAttributes{Title: "get_cluster_error", Detail: err.Error()}
 				logger.Error(err.Error())
@@ -172,7 +169,7 @@ func (ch *ClusterHandler) GetClusters() app.Adapter {
 
 			logger := log.WithFields(log.Fields{"package": "handlers", "event": "get_clusters", "request": context.RequestId()})
 
-			clusters, err := ch.service.GetClusters(context)
+			clusters, err := ch.service.GetClusters(context.RequestId())
 			if err != nil {
 				response := ErrorResponseAttributes{Title: "get_clusters_error", Detail: err.Error()}
 				logger.Error(err.Error())
@@ -203,7 +200,7 @@ func (ch *ClusterHandler) DeleteCluster() app.Adapter {
 				return
 			}
 
-			cluster, err := ch.service.DeleteCluster(context, terraform.NewTerraformClient(), id)
+			cluster, err := ch.service.DeleteCluster(context.RequestId(), terraform.NewTerraformClient(), id)
 			if err != nil {
 				response := ErrorResponseAttributes{Title: "delete_cluster_error", Detail: err.Error()}
 				logger.Error(err.Error())
