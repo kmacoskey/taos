@@ -181,7 +181,7 @@ func (dao *ClusterDao) GetExpiredClusters(db *sqlx.DB, requestId string) ([]mode
 		return nil, err
 	}
 
-	sql := `SELECT * FROM clusters WHERE expiration < $1`
+	sql := `SELECT * FROM clusters WHERE expiration < $1 AND status NOT IN ('destroyed','destroying')`
 	rows, err := tx.Queryx(sql, time.Now())
 	if err != nil {
 		tx.Rollback()

@@ -647,6 +647,23 @@ var _ = Describe("Cluster", func() {
 			})
 		})
 
+		Context("When there are expired clusters that are already destroyed or destroying", func() {
+			BeforeEach(func() {
+				expired_cluster.Status = "destroyed"
+				seed_err := seedDatabaseWithCluster(expired_cluster)
+				expired_cluster.Status = "destroying"
+				seed_err = seedDatabaseWithCluster(expired_cluster)
+				Expect(seed_err).NotTo(HaveOccurred())
+				clusters, err = dao.GetExpiredClusters(valid_db, valid_request_id)
+			})
+			It("Should not error", func() {
+				Expect(err).ShouldNot(HaveOccurred())
+			})
+			It("Should return no cluster(s)", func() {
+				Expect(clusters).To(HaveLen(0))
+			})
+		})
+
 		Context("When there are no clusters", func() {
 			BeforeEach(func() {
 				clusters, err = dao.GetExpiredClusters(valid_db, valid_request_id)
