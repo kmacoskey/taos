@@ -760,6 +760,15 @@ func (cs *ValidClusterService) GetClusters(request_id string) ([]models.Cluster,
 	return clusters, nil
 }
 
+func (cs *ValidClusterService) GetExpiredClusters(request_id string) ([]models.Cluster, error) {
+	clusters := []models.Cluster{}
+	cluster1 := models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status", Outputs: outputsBlob}
+	cluster2 := models.Cluster{Id: "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status", Outputs: outputsBlob}
+	clusters = append(clusters, cluster1)
+	clusters = append(clusters, cluster2)
+	return clusters, nil
+}
+
 func (cs *ValidClusterService) DeleteCluster(request_id string, client services.TerraformClient, id string) (*models.Cluster, error) {
 	cluster1 := models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status", Outputs: outputsBlob}
 	return &cluster1, nil
@@ -786,6 +795,10 @@ func (cs *EmptyClusterService) GetClusters(request_id string) ([]models.Cluster,
 	return []models.Cluster{}, nil
 }
 
+func (cs *EmptyClusterService) GetExpiredClusters(request_id string) ([]models.Cluster, error) {
+	return []models.Cluster{}, nil
+}
+
 func (cs *EmptyClusterService) DeleteCluster(request_id string, client services.TerraformClient, id string) (*models.Cluster, error) {
 	return nil, nil
 }
@@ -808,6 +821,10 @@ func (cs *ErroringClusterService) GetCluster(request_id string, id string) (*mod
 }
 
 func (cs *ErroringClusterService) GetClusters(request_id string) ([]models.Cluster, error) {
+	return nil, errors.New("Cluster service error")
+}
+
+func (cs *ErroringClusterService) GetExpiredClusters(request_id string) ([]models.Cluster, error) {
 	return nil, errors.New("Cluster service error")
 }
 

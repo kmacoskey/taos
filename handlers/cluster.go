@@ -21,6 +21,7 @@ import (
 type clusterService interface {
 	GetCluster(request_id string, id string) (*models.Cluster, error)
 	GetClusters(request_id string) ([]models.Cluster, error)
+	GetExpiredClusters(requestId string) ([]models.Cluster, error)
 	CreateCluster(terraform_config []byte, timeout string, request_id string, client services.TerraformClient) (*models.Cluster, error)
 	DeleteCluster(request_id string, client services.TerraformClient, id string) (*models.Cluster, error)
 }

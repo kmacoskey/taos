@@ -7,7 +7,10 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/kmacoskey/taos/app"
+	"github.com/kmacoskey/taos/daos"
 	"github.com/kmacoskey/taos/handlers"
+	"github.com/kmacoskey/taos/reaper"
+	"github.com/kmacoskey/taos/services"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -30,6 +33,9 @@ func main() {
 	router := mux.NewRouter()
 	handlers.ServeClusterResources(router, db)
 
+	reaper, _ := reaper.NewClusterReaper(app.GlobalServerConfig.ReapInterval, services.NewClusterService(daos.NewClusterDao(), db), db)
+	reaper.StartReaping()
+
 	_ = StartHttpServer(router)
 	// Process control is expected to be handled from the environment
 	//  therefore there is no reason to use the returned server to call
@@ -47,7 +53,7 @@ func StartHttpServer(router *mux.Router) *http.Server {
 		MaxHeaderBytes: 1 << 20,
 	}
 
-	// server.ListenAndServe()
+	server.ListenAndServe()
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil {

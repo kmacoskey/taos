@@ -15,6 +15,9 @@ type ServerConfig struct {
 	// Required -  No Default - Database connection string. Must be supported by lib pq.
 	ConnStr string `mapstructure:"conn_str"`
 
+	// Required - Defaults to 15m - Interval to reap expired clusters
+	ReapInterval string `mapstructure:"reap_interval"`
+
 	// Logrus Configuration
 	Logging LoggingConfig
 }
@@ -43,6 +46,7 @@ func LoadServerConfig(config *ServerConfig, path string) error {
 
 	// Set Defaults
 	v.SetDefault("server_port", 8080)
+	v.SetDefault("reap_interval", "15m")
 
 	if err := v.ReadInConfig(); err != nil {
 		return fmt.Errorf("Failed to read the configuration file: %s", err)

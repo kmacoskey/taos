@@ -50,6 +50,11 @@ func (s *ClusterService) GetClusters(request_id string) ([]models.Cluster, error
 	return clusters, err
 }
 
+func (s *ClusterService) GetExpiredClusters(request_id string) ([]models.Cluster, error) {
+	clusters, err := s.dao.GetExpiredClusters(s.db, request_id)
+	return clusters, err
+}
+
 func (s *ClusterService) CreateCluster(terraform_config []byte, timeout string, request_id string, client TerraformClient) (*models.Cluster, error) {
 	cluster, err := s.dao.CreateCluster(s.db, terraform_config, timeout, request_id)
 	if err != nil {

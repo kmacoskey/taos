@@ -8,7 +8,7 @@ LDFLAGS:=-ldflags "-X github.com/kmacoskey/taos/app.Version=${VERSION}"
 default: build
 
 test:
-	ginkgo -slowSpecThreshold 40 daos services terraform handlers .
+	ginkgo -slowSpecThreshold 60 daos services terraform reaper handlers .
 
 cover: test
 	go tool cover -html=coverage-all.out

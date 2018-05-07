@@ -65,6 +65,7 @@ func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, timeout string,
 		message,
 		terraform_config,
 		timestamp,
+		expiration,
 		timeout
 	) VALUES (
 			:id,
@@ -73,6 +74,7 @@ func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, timeout string,
 			:message,
 			:terraform_config,
 			:timestamp,
+			:expiration,
 			:timeout
 		)`
 	_, err = tx.NamedQuery(sql, cluster)
