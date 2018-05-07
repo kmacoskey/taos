@@ -53,7 +53,7 @@ func StartHttpServer(router *mux.Router) *http.Server {
 		MaxHeaderBytes: 1 << 20,
 	}
 
-	server.ListenAndServe()
+	// server.ListenAndServe()
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil {

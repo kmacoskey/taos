@@ -16,8 +16,11 @@ import (
 
 	. "github.com/kmacoskey/taos"
 	"github.com/kmacoskey/taos/app"
+	"github.com/kmacoskey/taos/daos"
 	"github.com/kmacoskey/taos/handlers"
 	"github.com/kmacoskey/taos/models"
+	"github.com/kmacoskey/taos/reaper"
+	"github.com/kmacoskey/taos/services"
 	"github.com/kmacoskey/taos/terraform"
 )
 
@@ -35,7 +38,11 @@ var _ = Describe("Taos", func() {
 	)
 
 	BeforeSuite(func() {
-		valid_terraform_config = []byte(`{"config":"{\"provider\":{\"google\":{\"project\":\"data-gp-toolsmiths\",\"region\":\"us-central1\"}},\"output\":{\"foo\":{\"value\":\"bar\"}}}","timeout":"10m"}`)
+		// err = app.InitLogger(app.GlobalServerConfig.Logging)
+		// Expect(err).NotTo(HaveOccurred())
+		log.SetLevel(log.FatalLevel)
+
+		valid_terraform_config = []byte(`{"config":"{\"provider\":{\"google\":{\"project\":\"data-gp-toolsmiths\",\"region\":\"us-central1\"}},\"output\":{\"foo\":{\"value\":\"bar\"}}}","timeout":"5s"}`)
 
 		expected_terraform_outputs = make(map[string]handlers.TerraformOutput)
 		expected_terraform_outputs["foo"] = handlers.TerraformOutput{
@@ -46,13 +53,13 @@ var _ = Describe("Taos", func() {
 		err = app.LoadServerConfig(&app.GlobalServerConfig, ".")
 		Expect(err).NotTo(HaveOccurred())
 
-		// err = app.InitLogger(app.GlobalServerConfig.Logging)
-		// Expect(err).NotTo(HaveOccurred())
-		log.SetLevel(log.FatalLevel)
-
 		db, err = app.DatabaseConnect(app.GlobalServerConfig.ConnStr)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(db).NotTo(BeNil())
+
+		// Ensure a clean table of clusters before testing
+		truncate_clusters := `TRUNCATE TABLE clusters`
+		db.MustExec(truncate_clusters)
 
 		router := mux.NewRouter()
 		handlers.ServeClusterResources(router, db)
@@ -177,6 +184,43 @@ var _ = Describe("Taos", func() {
 
 					return eventual_cluster_response_json.Data.Attributes.Status
 				}, 40, .5).Should(Equal(models.ClusterStatusDestroyed))
+			})
+		})
+	})
+
+	// ======================================================================
+	//  _ __ ___  __ _ _ __
+	// | '__/ _ \/ _` | '_ \
+	// | | |  __/ (_| | |_) |
+	// |_|  \___|\__,_| .__/
+	//                |_|
+	// ======================================================================
+	Describe("Automatic reaping", func() {
+		Context("When everything goes ok", func() {
+			BeforeEach(func() {
+				reaper, _ := reaper.NewClusterReaper("5s", services.NewClusterService(daos.NewClusterDao(), db), db)
+				reaper.StartReaping()
+
+				response, body = httpClusterRequest("PUT", "http://localhost:8080/cluster", valid_terraform_config)
+				cluster_response_json = &handlers.ClusterResponse{}
+				err = json.Unmarshal(body, &cluster_response_json)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Give time to provision the cluster
+				time.Sleep(10 * time.Second)
+			})
+			It("Should eventually reap expired clusters", func() {
+				Eventually(func() string {
+					url := fmt.Sprintf("http://localhost:8080/cluster/%s", cluster_response_json.Data.Attributes.Id)
+
+					_, eventual_body := httpClusterRequest("GET", url, valid_terraform_config)
+					eventual_cluster_response_json := &handlers.ClusterResponse{}
+					err = json.Unmarshal(eventual_body, &eventual_cluster_response_json)
+					Expect(err).NotTo(HaveOccurred())
+
+					return eventual_cluster_response_json.Data.Attributes.Status
+				}, 100, 5).Should(Equal(models.ClusterStatusDestroyed))
+
 			})
 		})
 	})
