@@ -2,4 +2,4 @@ conn_str: "postgres://taos:changeme@127.0.0.1:5432/taos?sslmode=disable"
 reap_interval: "10s"
 Logging:
   log_format: custom
-  log_level: debug
+  log_level: info

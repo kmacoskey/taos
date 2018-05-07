@@ -2,6 +2,7 @@ package reaper
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -48,7 +49,7 @@ func (reaper *ClusterReaper) StartReaping() {
 
 	go func() {
 		for _ = range reaper.ticker.C {
-			logger.Info("reaping expired clusters")
+			logger.Debug("reaping expired clusters")
 			err := reaper.ReapClusters()
 			if err != nil {
 				logger.Error(err)
@@ -68,6 +69,7 @@ func (reaper *ClusterReaper) ReapClusters() error {
 	}
 
 	for _, cluster := range clusters {
+		logger.Info(fmt.Sprintf("reaping %v cluster(s)", len(clusters)))
 		err := reaper.ReapCluster(cluster.Id)
 		if err != nil {
 			logger.Error(err)
