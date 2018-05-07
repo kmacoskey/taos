@@ -231,6 +231,7 @@ func httpClusterRequest(request_type string, url string, body []byte) (*http.Res
 	req, err := http.NewRequest(request_type, url, bytes.NewBuffer(body))
 	Expect(err).NotTo(HaveOccurred())
 	req.Header.Set("Content-Type", "application/json")
+	req.Close = true
 
 	client := &http.Client{}
 	response, err := client.Do(req)
