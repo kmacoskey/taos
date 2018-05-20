@@ -41,7 +41,10 @@ func NewClusterService(dao clusterDao, db *sqlx.DB) *ClusterService {
 }
 
 func (s *ClusterService) GetCluster(request_id string, id string) (*models.Cluster, error) {
+	logger := log.WithFields(log.Fields{"package": "services", "event": "get_cluster", "request": request_id})
+	logger.Info(fmt.Sprintf("servicing request to get cluster '%v'", id))
 	cluster, err := s.dao.GetCluster(s.db, id, request_id)
+	logger.Info(fmt.Sprintf("service returning cluster '%v'", id))
 	return cluster, err
 }
 
@@ -56,6 +59,8 @@ func (s *ClusterService) GetExpiredClusters(request_id string) ([]models.Cluster
 }
 
 func (s *ClusterService) CreateCluster(terraform_config []byte, timeout string, request_id string, client TerraformClient) (*models.Cluster, error) {
+	logger := log.WithFields(log.Fields{"package": "services", "event": "create_cluster", "request": request_id})
+	logger.Info("servicing request to create cluster")
 	cluster, err := s.dao.CreateCluster(s.db, terraform_config, timeout, request_id)
 	if err != nil {
 		return cluster, err
@@ -65,11 +70,15 @@ func (s *ClusterService) CreateCluster(terraform_config []byte, timeout string, 
 	//  is handled in the terraform service asynchronously
 	go s.TerraformProvisionCluster(client, cluster, terraform_config, request_id)
 
+	logger.Info("service returning requested cluster")
+
 	return cluster, err
 }
 
 func (s *ClusterService) DeleteCluster(request_id string, client TerraformClient, id string) (*models.Cluster, error) {
 	logger := log.WithFields(log.Fields{"package": "services", "event": "delete_cluster", "request": request_id})
+
+	logger.Info("servicing request to delete cluster")
 
 	// Retrieve the cluster to destroy
 	cluster, err := s.dao.GetCluster(s.db, id, request_id)
@@ -99,6 +108,8 @@ func (s *ClusterService) DeleteCluster(request_id string, client TerraformClient
 	// Cluster with requested action is returned and eventual cluster status
 	//  is handled in the terraform service asynchronously
 	go s.TerraformDestroyCluster(client, cluster, request_id)
+
+	logger.Info("servicing returning cluster set to delete")
 
 	return cluster, nil
 }

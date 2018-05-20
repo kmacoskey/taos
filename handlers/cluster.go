@@ -5,6 +5,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 
@@ -103,6 +104,8 @@ func (ch *ClusterHandler) CreateCluster() app.Adapter {
 				return
 			}
 
+			logger.Info(fmt.Sprintf("new request to create cluster '%+v'", cluster_request))
+
 			cluster, err := ch.service.CreateCluster([]byte(cluster_request.TerraformConfig), cluster_request.Timeout, context.RequestId(), terraform.NewTerraformClient())
 
 			// Currently no expectation for the situation that
@@ -140,6 +143,8 @@ func (ch *ClusterHandler) GetCluster() app.Adapter {
 				return
 			}
 
+			logger.Info(fmt.Sprintf("new request to get cluster '%v'", id))
+
 			cluster, err := ch.service.GetCluster(context.RequestId(), id)
 			if err != nil {
 				response := ErrorResponseAttributes{Title: "get_cluster_error", Detail: err.Error()}
@@ -156,6 +161,8 @@ func (ch *ClusterHandler) GetCluster() app.Adapter {
 				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusNotFound)
 				return
 			}
+
+			logger.Info(fmt.Sprintf("responding to client with cluster '%v'", id))
 
 			respondWithJson(w, newClusterResponse(cluster, context.RequestId()), http.StatusOK)
 		})
@@ -201,6 +208,8 @@ func (ch *ClusterHandler) DeleteCluster() app.Adapter {
 				return
 			}
 
+			logger.Info(fmt.Sprintf("new request to delete cluster '%v'", id))
+
 			cluster, err := ch.service.DeleteCluster(context.RequestId(), terraform.NewTerraformClient(), id)
 			if err != nil {
 				response := ErrorResponseAttributes{Title: "delete_cluster_error", Detail: err.Error()}
@@ -216,6 +225,8 @@ func (ch *ClusterHandler) DeleteCluster() app.Adapter {
 				respondWithJson(w, newErrorResponse(&response, context.RequestId()), http.StatusNotFound)
 				return
 			}
+
+			logger.Info(fmt.Sprintf("responding to client with deleted cluster '%v'", id))
 
 			respondWithJson(w, newClusterResponse(cluster, context.RequestId()), http.StatusAccepted)
 		})

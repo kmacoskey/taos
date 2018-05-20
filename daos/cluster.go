@@ -58,6 +58,8 @@ func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, timeout string,
 		return nil, err
 	}
 
+	logger.Info(fmt.Sprintf("inserting new cluster '%v' into database", requestId))
+
 	sql := `INSERT INTO clusters (
 		id,
 		name,
@@ -106,6 +108,8 @@ func (dao *ClusterDao) GetCluster(db *sqlx.DB, id string, requestId string) (*mo
 		return nil, err
 	}
 
+	logger.Info(fmt.Sprintf("fetching cluster '%v' from database", id))
+
 	tx, err := db.Beginx()
 	if err != nil {
 		logger.Error(err.Error())
@@ -121,6 +125,8 @@ func (dao *ClusterDao) GetCluster(db *sqlx.DB, id string, requestId string) (*mo
 	}
 
 	tx.Commit()
+
+	logger.Info(fmt.Sprintf("returning cluster '%v' from database", id))
 
 	return &cluster, nil
 }
