@@ -1,0 +1,8 @@
+# Connection details to a Postgresql Database
+conn_str: "postgres://<role>:<password>@<host>:<port>/<database>?sslmode=disable"
+# Interval to check for expired clusters to destroy
+reap_interval: "5s"
+# Logrus settings
+Logging:
+  log_format: custom
+  log_level: info

@@ -1,3 +1,4 @@
+config.yml
 taos
 *.so
 *.dylib

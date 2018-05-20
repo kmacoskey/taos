@@ -1,7 +1,6 @@
 # VERSION_TAG:=$(shell git describe --abbrev=0 --tags || echo "0.1")
-# VERSION:=${VERSION}\#$(shell git log -n 1 --pretty=format:"%h")
-# PACKAGES:=$(shell go list ./... | sed -n '1!p' | grep -v /vendor/ | sed 's!.*/!!')
-LDFLAGS:=-ldflags "-X github.com/kmacoskey/taos/app.Version=${VERSION}"
+VERSION_TAG:="1.0.0"
+LDFLAGS:=-ldflags "-X github.com/kmacoskey/taos/app.Version=${VERSION_TAG}"
 
 .PHONY: test clean
 
@@ -9,9 +8,6 @@ default: build
 
 test:
 	ginkgo -slowSpecThreshold 60 daos services terraform reaper handlers .
-
-cover: test
-	go tool cover -html=coverage-all.out
 
 run:
 	go run ${LDFLAGS} taos.go
