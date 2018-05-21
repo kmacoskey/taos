@@ -29,6 +29,7 @@ var _ = Describe("Taos", func() {
 		err                        error
 		db                         *sqlx.DB
 		server                     *http.Server
+		server_port                string
 		response                   *http.Response
 		body                       []byte
 		cluster_id                 string
@@ -52,6 +53,8 @@ var _ = Describe("Taos", func() {
 		}
 		err = app.LoadServerConfig(&app.GlobalServerConfig, ".")
 		Expect(err).NotTo(HaveOccurred())
+
+		server_port = app.GlobalServerConfig.ServerPort
 
 		db, err = app.DatabaseConnect(app.GlobalServerConfig.ConnStr)
 		Expect(err).NotTo(HaveOccurred())
@@ -87,7 +90,7 @@ var _ = Describe("Taos", func() {
 	Describe("Creating a cluster", func() {
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				response, body = httpClusterRequest("PUT", "http://localhost:8080/cluster", valid_terraform_config)
+				response, body = httpClusterRequest("PUT", fmt.Sprintf("http://localhost:%s/cluster", server_port), valid_terraform_config)
 				cluster_response_json = &handlers.ClusterResponse{}
 				err = json.Unmarshal(body, &cluster_response_json)
 			})
@@ -103,7 +106,7 @@ var _ = Describe("Taos", func() {
 			})
 			It("Should eventually be provisioned", func() {
 				Eventually(func() string {
-					url := fmt.Sprintf("http://localhost:8080/cluster/%s", cluster_response_json.Data.Attributes.Id)
+					url := fmt.Sprintf("http://localhost:%s/cluster/%s", server_port, cluster_response_json.Data.Attributes.Id)
 
 					_, eventual_body := httpClusterRequest("GET", url, valid_terraform_config)
 					eventual_cluster_response_json := &handlers.ClusterResponse{}
@@ -115,7 +118,7 @@ var _ = Describe("Taos", func() {
 			})
 			It("Should eventually set the message", func() {
 				Eventually(func() string {
-					url := fmt.Sprintf("http://localhost:8080/cluster/%s", cluster_response_json.Data.Attributes.Id)
+					url := fmt.Sprintf("http://localhost:%s/cluster/%s", server_port, cluster_response_json.Data.Attributes.Id)
 
 					_, eventual_body := httpClusterRequest("GET", url, valid_terraform_config)
 					eventual_cluster_response_json := &handlers.ClusterResponse{}
@@ -127,7 +130,7 @@ var _ = Describe("Taos", func() {
 			})
 			It("Should eventually set the outputs", func() {
 				Eventually(func() map[string]handlers.TerraformOutput {
-					url := fmt.Sprintf("http://localhost:8080/cluster/%s", cluster_response_json.Data.Attributes.Id)
+					url := fmt.Sprintf("http://localhost:%s/cluster/%s", server_port, cluster_response_json.Data.Attributes.Id)
 
 					_, eventual_body := httpClusterRequest("GET", url, valid_terraform_config)
 					eventual_cluster_response_json := &handlers.ClusterResponse{}
@@ -152,7 +155,7 @@ var _ = Describe("Taos", func() {
 	Describe("Deleting a cluster", func() {
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				response, body = httpClusterRequest("PUT", "http://localhost:8080/cluster", valid_terraform_config)
+				response, body = httpClusterRequest("PUT", fmt.Sprintf("http://localhost:%s/cluster", server_port), valid_terraform_config)
 				temp_cluster_response_json := &handlers.ClusterResponse{}
 				err = json.Unmarshal(body, &temp_cluster_response_json)
 				Expect(err).NotTo(HaveOccurred())
@@ -160,7 +163,7 @@ var _ = Describe("Taos", func() {
 				cluster_id = temp_cluster_response_json.Data.Attributes.Id
 				time.Sleep(40 * time.Second)
 
-				response, body = httpClusterRequest("DELETE", fmt.Sprintf("http://localhost:8080/cluster/%s", cluster_id), nil)
+				response, body = httpClusterRequest("DELETE", fmt.Sprintf("http://localhost:%s/cluster/%s", server_port, cluster_id), nil)
 				cluster_response_json = &handlers.ClusterResponse{}
 				err = json.Unmarshal(body, &cluster_response_json)
 			})
@@ -175,7 +178,7 @@ var _ = Describe("Taos", func() {
 			})
 			It("Should eventually be destroyed", func() {
 				Eventually(func() string {
-					url := fmt.Sprintf("http://localhost:8080/cluster/%s", cluster_response_json.Data.Attributes.Id)
+					url := fmt.Sprintf("http://localhost:%s/cluster/%s", server_port, cluster_response_json.Data.Attributes.Id)
 
 					_, eventual_body := httpClusterRequest("GET", url, valid_terraform_config)
 					eventual_cluster_response_json := &handlers.ClusterResponse{}
@@ -201,7 +204,7 @@ var _ = Describe("Taos", func() {
 				reaper, _ := reaper.NewClusterReaper("5s", services.NewClusterService(daos.NewClusterDao(), db), db)
 				reaper.StartReaping()
 
-				response, body = httpClusterRequest("PUT", "http://localhost:8080/cluster", valid_terraform_config)
+				response, body = httpClusterRequest("PUT", fmt.Sprintf("http://localhost:%s/cluster", server_port), valid_terraform_config)
 				cluster_response_json = &handlers.ClusterResponse{}
 				err = json.Unmarshal(body, &cluster_response_json)
 				Expect(err).NotTo(HaveOccurred())
@@ -211,7 +214,7 @@ var _ = Describe("Taos", func() {
 			})
 			It("Should eventually reap expired clusters", func() {
 				Eventually(func() string {
-					url := fmt.Sprintf("http://localhost:8080/cluster/%s", cluster_response_json.Data.Attributes.Id)
+					url := fmt.Sprintf("http://localhost:%s/cluster/%s", server_port, cluster_response_json.Data.Attributes.Id)
 
 					_, eventual_body := httpClusterRequest("GET", url, valid_terraform_config)
 					eventual_cluster_response_json := &handlers.ClusterResponse{}

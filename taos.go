@@ -46,14 +46,14 @@ func StartHttpServer(router *mux.Router) *http.Server {
 	logger := log.WithFields(log.Fields{"package": "taos", "event": "start_http", "request": ""})
 
 	server := &http.Server{
-		Addr:           ":8080",
+		Addr:           fmt.Sprintf(":%s", app.GlobalServerConfig.ServerPort),
 		Handler:        router,
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
 	}
 
-	server.ListenAndServe()
+	// server.ListenAndServe()
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil {

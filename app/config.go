@@ -10,7 +10,7 @@ var GlobalServerConfig ServerConfig
 
 type ServerConfig struct {
 	// Required - Defaults to 8080 - Listen and Serve port
-	ServerPort int `mapstructure:"server_port"`
+	ServerPort string `mapstructure:"server_port"`
 
 	// Required -  No Default - Database connection string. Must be supported by lib pq.
 	ConnStr string `mapstructure:"conn_str"`
