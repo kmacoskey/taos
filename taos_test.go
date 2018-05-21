@@ -55,6 +55,8 @@ var _ = Describe("Taos", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		server_port = app.GlobalServerConfig.ServerPort
+		// Run the server ListenAndServer in a go thread to allow for testing
+		app.GlobalServerConfig.BackgroundForTesting = true
 
 		db, err = app.DatabaseConnect(app.GlobalServerConfig.ConnStr)
 		Expect(err).NotTo(HaveOccurred())

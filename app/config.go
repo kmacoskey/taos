@@ -12,6 +12,9 @@ type ServerConfig struct {
 	// Required - Defaults to 8080 - Listen and Serve port
 	ServerPort string `mapstructure:"server_port"`
 
+	// Optional - Defaults to False - Whether to run the server ListenAndServer() in a go thread to allow testing
+	BackgroundForTesting bool `mapstructure:"background_for_testing"`
+
 	// Required -  No Default - Database connection string. Must be supported by lib pq.
 	ConnStr string `mapstructure:"conn_str"`
 

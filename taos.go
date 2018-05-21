@@ -53,14 +53,17 @@ func StartHttpServer(router *mux.Router) *http.Server {
 		MaxHeaderBytes: 1 << 20,
 	}
 
-	// server.ListenAndServe()
+	if app.GlobalServerConfig.BackgroundForTesting {
+		go func() {
+			if err := server.ListenAndServe(); err != nil {
+				// This is most likely an intentional close
+				logger.Info(err)
+			}
+		}()
 
-	go func() {
-		if err := server.ListenAndServe(); err != nil {
-			// This is most likely an intentional close
-			logger.Info(err)
-		}
-	}()
+	} else {
+		server.ListenAndServe()
+	}
 
 	// return reference so caller can call Shutdown() if desired
 	return server

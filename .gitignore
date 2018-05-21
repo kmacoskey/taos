@@ -1,4 +1,5 @@
 config.yml
+notes.md
 taos
 *.so
 *.dylib
