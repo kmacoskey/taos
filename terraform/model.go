@@ -11,6 +11,9 @@ type TerraformInfra struct {
 }
 
 const (
+	ErrorMissingProject     = "No project specified for running terraform client actions"
+	ErrorMissingRegion      = "No region specified for running terraform client actions"
+	ErrorMissingCredentials = "No credentials specified for running terraform client actions"
 	ErrorMissingConfig      = "refusing to create client without terraform configuration content"
 	ErrorClientDestroyNoDir = "Failed to destroy Client: Working directory does not exist."
 	ErrorInvalidConfig      = "The Terraform configuration must be valid before initialization"

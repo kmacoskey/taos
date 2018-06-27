@@ -22,11 +22,19 @@ type TerraformClient interface {
 	Apply() ([]byte, string, error)
 	Destroy() ([]byte, string, error)
 	Outputs() ([]byte, error)
+	SetProject() string
 }
 
 type Client struct {
-	Terraform TerraformInfra
-	Command   TerraformCommandRunner
+	Terraform     TerraformInfra
+	Command       TerraformCommandRunner
+	CommandConfig TerraformCommandConfig
+}
+
+type TerraformCommandConfig struct {
+	Project     string
+	Region      string
+	Credentials string
 }
 
 func NewTerraformClient() *Client {
@@ -52,10 +60,35 @@ func (client *Client) SetState(state []byte) {
 	client.Terraform.State = state
 }
 
+func (client *Client) SetProject(project string) {
+	client.CommandConfig.Project = project
+}
+
+func (client *Client) Project() string {
+	return client.CommandConfig.Project
+}
+
+func (client *Client) SetRegion(region string) {
+	client.CommandConfig.Region = region
+}
+
+func (client *Client) Region() string {
+	return client.CommandConfig.Region
+}
+
+func (client *Client) SetCredentials(credentials string) {
+	client.CommandConfig.Credentials = credentials
+}
+
+func (client *Client) Credentials() string {
+	return client.CommandConfig.Credentials
+}
+
 func (client *Client) Version() (string, error) {
-	err, stdout, stderr := client.Command.Run("", []string{
-		"-v",
-	})
+	err, stdout, stderr := client.Command.Run("",
+		[]string{
+			"-v",
+		}, client.Project(), client.Region(), client.Credentials())
 
 	if err != nil {
 		return "", fmt.Errorf("Failed to retrieve version.\nError: %s\nOutput: %s", err, stderr)
@@ -74,15 +107,35 @@ func (client *Client) Version() (string, error) {
 //  allow for terraform commands.
 // Nothing is done if the Config content is empty
 func (client *Client) ClientInit() error {
-	// logger := log.WithFields(log.Fields{"package": "terraform", "event": "client_init"})
+	logger := log.WithFields(log.Fields{"package": "terraform", "event": "client_init"})
 
 	if len(client.Terraform.Config) <= 0 {
+		logger.Error(ErrorMissingConfig)
 		return fmt.Errorf(ErrorMissingConfig)
+	}
+
+	if len(client.Project()) == 0 {
+		logger.Error(ErrorMissingProject)
+		err := errors.New(ErrorMissingProject)
+		return err
+	}
+
+	if len(client.Region()) == 0 {
+		logger.Error(ErrorMissingRegion)
+		err := errors.New(ErrorMissingRegion)
+		return err
+	}
+
+	if len(client.Credentials()) == 0 {
+		logger.Error(ErrorMissingCredentials)
+		err := errors.New(ErrorMissingCredentials)
+		return err
 	}
 
 	// Create temporary working directory
 	wd, err := ioutil.TempDir("", "terraform_client_workingdir")
 	if err != nil {
+		logger.Error(err.Error())
 		return err
 	}
 	client.Terraform.WorkingDir = wd
@@ -101,6 +154,7 @@ func (client *Client) ClientInit() error {
 		configfile := filepath.Join(client.Terraform.WorkingDir, client.Terraform.ConfigFileName)
 		err = ioutil.WriteFile(configfile, client.Terraform.Config, 0666)
 		if err != nil {
+			logger.Error(err.Error())
 			return err
 		}
 	}
@@ -110,6 +164,7 @@ func (client *Client) ClientInit() error {
 		statefile := filepath.Join(client.Terraform.WorkingDir, client.Terraform.StateFileName)
 		err = ioutil.WriteFile(statefile, client.Terraform.State, 0666)
 		if err != nil {
+			logger.Error(err.Error())
 			return err
 		}
 	}
@@ -140,7 +195,12 @@ func (client *Client) Init() (string, error) {
 	}
 
 	initArgs = append(initArgs, client.Terraform.WorkingDir)
-	err, stdout, stderr := client.Command.Run(client.Terraform.WorkingDir, initArgs)
+	err, stdout, stderr := client.Command.Run(
+		client.Terraform.WorkingDir,
+		initArgs,
+		client.Project(),
+		client.Region(),
+		client.Credentials())
 
 	if err != nil {
 		return "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr))
@@ -176,7 +236,10 @@ func (client *Client) Plan() (string, error) {
 	planArgs = append(planArgs, fmt.Sprintf("-out=%s", client.Terraform.PlanFile))
 	planArgs = append(planArgs, client.Terraform.WorkingDir)
 
-	err, stdout, stderr := client.Command.Run(client.Terraform.WorkingDir, planArgs)
+	err, stdout, stderr := client.Command.Run(client.Terraform.WorkingDir, planArgs,
+		client.Project(),
+		client.Region(),
+		client.Credentials())
 
 	if err != nil {
 		return "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr))
@@ -199,7 +262,10 @@ func (client *Client) Apply() ([]byte, string, error) {
 
 	applyArgs = append(applyArgs, client.Terraform.PlanFile)
 
-	err, stdout, stderr := client.Command.Run(client.Terraform.WorkingDir, applyArgs)
+	err, stdout, stderr := client.Command.Run(client.Terraform.WorkingDir, applyArgs,
+		client.Project(),
+		client.Region(),
+		client.Credentials())
 
 	if err != nil {
 		return nil, "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr))
@@ -231,7 +297,10 @@ func (client *Client) Destroy() ([]byte, string, error) {
 	destroyArgs = append(destroyArgs, fmt.Sprintf("-state=%s", statefile))
 	destroyArgs = append(destroyArgs, client.Terraform.WorkingDir)
 
-	err, stdout, stderr := client.Command.Run(client.Terraform.WorkingDir, destroyArgs)
+	err, stdout, stderr := client.Command.Run(client.Terraform.WorkingDir, destroyArgs,
+		client.Project(),
+		client.Region(),
+		client.Credentials())
 
 	if err != nil {
 		return nil, "", errors.New(fmt.Sprint(fmt.Sprint(err) + ": " + stderr))
@@ -263,7 +332,11 @@ func (client *Client) Outputs() (string, error) {
 
 	outputsArgs = append(outputsArgs, fmt.Sprintf("-state=%s", statefile))
 
-	err, stdout, stderr := client.Command.Run(client.Terraform.WorkingDir, outputsArgs)
+	err, stdout, stderr := client.Command.Run(client.Terraform.WorkingDir, outputsArgs,
+		client.Project(),
+		client.Region(),
+		client.Credentials())
+
 	if err != nil {
 
 		re := regexp.MustCompile(`The state file either has no outputs defined`)

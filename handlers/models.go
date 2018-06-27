@@ -3,6 +3,8 @@ package handlers
 type ClusterRequest struct {
 	TerraformConfig string `json:"config"`
 	Timeout         string `json:"timeout"`
+	Project         string `json:"project"`
+	Region          string `json:"region"`
 }
 
 type ClusterResponse struct {

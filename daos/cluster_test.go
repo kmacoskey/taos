@@ -31,7 +31,9 @@ var (
 				terraform_config 	json,
 				timestamp 				timestamp,
 				expiration 				timestamp,
-				timeout           text
+				timeout           text,
+				project           text,
+				region            text
 		)`
 	truncate_clusters = `TRUNCATE TABLE clusters`
 	drop_clusters_ddl = `DROP TABLE IF EXISTS cluster_test.clusters CASCADE`
@@ -78,7 +80,11 @@ var _ = Describe("Cluster", func() {
 		not_expired_cluster    *models.Cluster
 		valid_request_id       string
 		valid_timeout          string
+		valid_project          string
+		valid_region           string
 		new_timestamp          time.Time
+		new_project            string
+		new_region             string
 		clusters               []models.Cluster
 		err                    error
 		dao                    ClusterDao
@@ -90,8 +96,9 @@ var _ = Describe("Cluster", func() {
 		dao = ClusterDao{}
 
 		valid_request_id = "c12c2d58-2af0-11e8-b467-0ed5f89f718b"
-
 		valid_timeout = "10m"
+		valid_project = "project_name"
+		valid_region = "region_name"
 
 		cluster_1 = &models.Cluster{
 			Id:              "a19e2758-0ec5-11e8-ba89-0ed5f89f718b",
@@ -103,6 +110,8 @@ var _ = Describe("Cluster", func() {
 			TerraformConfig: []byte(`{}`),
 			Timestamp:       time.Now(),
 			Timeout:         valid_timeout,
+			Project:         valid_project,
+			Region:          valid_region,
 		}
 
 		cluster_2 = &models.Cluster{
@@ -115,6 +124,8 @@ var _ = Describe("Cluster", func() {
 			TerraformConfig: []byte(`{}`),
 			Timestamp:       time.Now(),
 			Timeout:         valid_timeout,
+			Project:         valid_project,
+			Region:          valid_region,
 		}
 
 		valid_terraform_config = []byte(`{"provider":{"google":{}}}`)
@@ -158,7 +169,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				cluster, err = dao.CreateCluster(valid_db, valid_terraform_config, valid_timeout, valid_request_id)
+				cluster, err = dao.CreateCluster(valid_db, valid_terraform_config, valid_timeout, valid_request_id, valid_project, valid_region)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -177,6 +188,12 @@ var _ = Describe("Cluster", func() {
 			})
 			It("Should use the request id for the cluster id", func() {
 				Expect(cluster.Id).To(Equal(valid_request_id))
+			})
+			It("Should have a project", func() {
+				Expect(cluster.Project).To(Equal(valid_project))
+			})
+			It("Should have a region", func() {
+				Expect(cluster.Region).To(Equal(valid_region))
 			})
 			It("Should have a timestamp", func() {
 				Expect(cluster.Timestamp).NotTo(BeNil())
@@ -197,7 +214,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("Without terraform configuration", func() {
 			BeforeEach(func() {
-				cluster, err = dao.CreateCluster(valid_db, nil, valid_timeout, valid_request_id)
+				cluster, err = dao.CreateCluster(valid_db, nil, valid_timeout, valid_request_id, valid_project, valid_region)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -209,7 +226,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("Without a timeout", func() {
 			BeforeEach(func() {
-				cluster, err = dao.CreateCluster(valid_db, valid_terraform_config, "", valid_request_id)
+				cluster, err = dao.CreateCluster(valid_db, valid_terraform_config, "", valid_request_id, valid_project, valid_region)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -221,7 +238,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("Without a request id", func() {
 			BeforeEach(func() {
-				cluster, err = dao.CreateCluster(valid_db, valid_terraform_config, valid_timeout, "")
+				cluster, err = dao.CreateCluster(valid_db, valid_terraform_config, valid_timeout, "", valid_project, valid_region)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -233,7 +250,7 @@ var _ = Describe("Cluster", func() {
 
 		Context("When then database transaction cannot be created", func() {
 			BeforeEach(func() {
-				cluster, err = dao.CreateCluster(invalid_db, nil, valid_timeout, valid_request_id)
+				cluster, err = dao.CreateCluster(invalid_db, nil, valid_timeout, valid_request_id, valid_project, valid_region)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -551,6 +568,44 @@ var _ = Describe("Cluster", func() {
 			})
 		})
 
+		Context("When updating the project field", func() {
+			BeforeEach(func() {
+				seed_err := seedDatabaseWithCluster(cluster_1)
+				Expect(seed_err).NotTo(HaveOccurred())
+				new_project = "new_project_name"
+				err = dao.UpdateClusterField(valid_db, cluster_1.Id, "project", new_project, valid_request_id)
+			})
+			It("Should not error", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+			It("Should have been updated for the cluster saved", func() {
+				// In order to use sqlx scanning, cluster needs to be empty struct
+				cluster := models.Cluster{}
+				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", cluster_1.Id)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cluster.Project).To(Equal(new_project))
+			})
+		})
+
+		Context("When updating the region field", func() {
+			BeforeEach(func() {
+				seed_err := seedDatabaseWithCluster(cluster_1)
+				Expect(seed_err).NotTo(HaveOccurred())
+				new_region = "new_region_name"
+				err = dao.UpdateClusterField(valid_db, cluster_1.Id, "region", new_region, valid_request_id)
+			})
+			It("Should not error", func() {
+				Expect(err).NotTo(HaveOccurred())
+			})
+			It("Should have been updated for the cluster saved", func() {
+				// In order to use sqlx scanning, cluster needs to be empty struct
+				cluster := models.Cluster{}
+				err := valid_db.Get(&cluster, "SELECT * FROM clusters WHERE id=$1", cluster_1.Id)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(cluster.Region).To(Equal(new_region))
+			})
+		})
+
 		Context("When updating a field that does not exist", func() {
 			BeforeEach(func() {
 				seed_err := seedDatabaseWithCluster(cluster_1)
@@ -715,7 +770,9 @@ func seedDatabaseWithCluster(cluster *models.Cluster) error {
 		:terraform_state, 
 		:timestamp, 
 		:expiration,
-		:timeout
+		:timeout,
+		:project,
+		:region
 	)`
 	_, err := valid_db.NamedExec(sql, cluster)
 	return err

@@ -17,7 +17,7 @@ func NewClusterDao() *ClusterDao {
 	return &ClusterDao{}
 }
 
-func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, timeout string, requestId string) (*models.Cluster, error) {
+func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, timeout string, requestId string, project string, region string) (*models.Cluster, error) {
 	logger := log.WithFields(log.Fields{"package": "daos", "event": "create_cluster", "request": requestId})
 
 	if len(config) == 0 {
@@ -28,6 +28,18 @@ func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, timeout string,
 
 	if len(timeout) == 0 {
 		err := errors.New("cannot create cluster without timeout")
+		logger.Error(err)
+		return nil, err
+	}
+
+	if len(project) == 0 {
+		err := errors.New("cannot create cluster without project")
+		logger.Error(err)
+		return nil, err
+	}
+
+	if len(region) == 0 {
+		err := errors.New("cannot create cluster without region")
 		logger.Error(err)
 		return nil, err
 	}
@@ -50,6 +62,8 @@ func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, timeout string,
 		Timestamp:       creation_time,
 		Expiration:      creation_time.Add(timeout_duration),
 		Timeout:         timeout,
+		Project:         project,
+		Region:          region,
 	}
 
 	tx, err := db.Beginx()
@@ -68,7 +82,9 @@ func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, timeout string,
 		terraform_config,
 		timestamp,
 		expiration,
-		timeout
+		timeout,
+		project,
+		region
 	) VALUES (
 			:id,
 			:name,
@@ -77,7 +93,9 @@ func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, timeout string,
 			:terraform_config,
 			:timestamp,
 			:expiration,
-			:timeout
+			:timeout,
+			:project,
+			:region
 		)`
 	_, err = tx.NamedQuery(sql, cluster)
 	if err != nil {
@@ -239,6 +257,10 @@ func (dao *ClusterDao) UpdateClusterField(db *sqlx.DB, id string, field string, 
 	case "timestamp":
 		tx.Rollback()
 		return errors.New("cannot update timestamp field")
+	case "project":
+		sql = `UPDATE clusters SET project = $2 WHERE id = $1 `
+	case "region":
+		sql = `UPDATE clusters SET region = $2 WHERE id = $1 `
 	default:
 		tx.Rollback()
 		return errors.New(fmt.Sprintf("field '%s' does not exist", field))

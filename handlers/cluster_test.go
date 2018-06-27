@@ -742,7 +742,7 @@ func NewValidClusterService() *ValidClusterService {
 	return &ValidClusterService{}
 }
 
-func (cs *ValidClusterService) CreateCluster(terraform_config []byte, timeout string, request_id string, client services.TerraformClient) (*models.Cluster, error) {
+func (cs *ValidClusterService) CreateCluster(terraform_config []byte, timeout string, project string, region string, request_id string, client services.TerraformClient) (*models.Cluster, error) {
 	cluster1 := &models.Cluster{Id: "a19e2758-0ec5-11e8-ba89-0ed5f89f718b", Name: "cluster", Status: "status", Outputs: outputsBlob}
 	return cluster1, nil
 }
@@ -783,7 +783,7 @@ func NewEmptyClusterService() *EmptyClusterService {
 	return &EmptyClusterService{}
 }
 
-func (cs *EmptyClusterService) CreateCluster(terraform_config []byte, timeout string, request_id string, client services.TerraformClient) (*models.Cluster, error) {
+func (cs *EmptyClusterService) CreateCluster(terraform_config []byte, timeout string, project string, region string, request_id string, client services.TerraformClient) (*models.Cluster, error) {
 	return nil, nil
 }
 
@@ -812,7 +812,7 @@ func NewErroringClusterService() *ErroringClusterService {
 	return &ErroringClusterService{}
 }
 
-func (cs *ErroringClusterService) CreateCluster(terraform_config []byte, timeout string, request_id string, client services.TerraformClient) (*models.Cluster, error) {
+func (cs *ErroringClusterService) CreateCluster(terraform_config []byte, timeout string, project string, region string, request_id string, client services.TerraformClient) (*models.Cluster, error) {
 	return nil, errors.New("Cluster service error")
 }
 

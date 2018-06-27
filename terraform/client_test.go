@@ -27,6 +27,12 @@ var _ = Describe("Client", func() {
 		validNoOutputsTerraformConfig []byte
 		validNoOutputsTerraformState  []byte
 		validTerraformOutputs         string
+		validProject                  string
+		emptyProject                  string
+		validRegion                   string
+		emptyRegion                   string
+		validCredentials              string
+		emptyCredentials              string
 		state                         []byte
 		stdout                        string
 		outputs                       string
@@ -49,6 +55,13 @@ var _ = Describe("Client", func() {
 		invalidTerraformState = []byte(`NotTheJsonYouAreLookingFor`)
 		emptyTerraformState = []byte(``)
 
+		validProject = "gcp-project-foo"
+		emptyProject = ""
+		validRegion = "gcp-region-foo"
+		emptyRegion = ""
+		validCredentials = "gcp-credentials-foo"
+		emptyCredentials = ""
+
 		validTerraformOutputs = "{\"bar\":{\"sensitive\":false,\"type\":\"string\",\"value\":\"foo\" }"
 	})
 
@@ -69,8 +82,11 @@ var _ = Describe("Client", func() {
 
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = validTerraformConfig
-				client.Terraform.State = validTerraformState
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(validTerraformConfig)
+				client.SetState(validTerraformState)
 				err = client.ClientInit()
 			})
 			It("Should not error", func() {
@@ -112,7 +128,10 @@ var _ = Describe("Client", func() {
 
 		Context("With no Terraform config", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = emptyTerraformConfig
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(emptyTerraformConfig)
 				err = client.ClientInit()
 			})
 			It("Should error", func() {
@@ -135,8 +154,11 @@ var _ = Describe("Client", func() {
 
 		Context("With no State content", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = validTerraformConfig
-				client.Terraform.State = emptyTerraformState
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(validTerraformConfig)
+				client.SetState(emptyTerraformState)
 				err = client.ClientInit()
 			})
 			It("Should not error", func() {
@@ -148,13 +170,55 @@ var _ = Describe("Client", func() {
 			})
 		})
 
+		Context("With no Project specified", func() {
+			BeforeEach(func() {
+				client.SetProject(emptyProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(validTerraformConfig)
+				err = client.ClientInit()
+			})
+			It("Should error", func() {
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Context("With no Region specified", func() {
+			BeforeEach(func() {
+				client.SetProject(validProject)
+				client.SetRegion(emptyRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(validTerraformConfig)
+				err = client.ClientInit()
+			})
+			It("Should error", func() {
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Context("With no Credentials specified", func() {
+			BeforeEach(func() {
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(emptyCredentials)
+				client.SetConfig(validTerraformConfig)
+				err = client.ClientInit()
+			})
+			It("Should error", func() {
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
 	})
 
 	Describe("Destroying the Terraform Client", func() {
 
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = validTerraformConfig
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(validTerraformConfig)
 				init_err := client.ClientInit()
 				Expect(init_err).NotTo(HaveOccurred())
 
@@ -170,7 +234,10 @@ var _ = Describe("Client", func() {
 
 		Context("When there is no working directory", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = invalidTerraformConfig
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(invalidTerraformConfig)
 				init_err := client.ClientInit()
 				client.Terraform.WorkingDir = "/tmp/this-should-not-be-an-existing-directory"
 				Expect(init_err).NotTo(HaveOccurred())
@@ -200,7 +267,10 @@ var _ = Describe("Client", func() {
 
 		Context("When everything goes ok", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = validTerraformConfig
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(validTerraformConfig)
 				client.Command = new(SuccessfulTerraformCommand)
 				stdout, err = client.Init()
 			})
@@ -217,7 +287,10 @@ var _ = Describe("Client", func() {
 
 		Context("With invalid Terraform config", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = invalidTerraformConfig
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(invalidTerraformConfig)
 				client.Command = new(FailingTerraformCommand)
 				stdout, err = client.Init()
 			})
@@ -234,7 +307,10 @@ var _ = Describe("Client", func() {
 
 		Context("With no Terraform config", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = emptyTerraformConfig
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(emptyTerraformConfig)
 				client.Command = new(SuccessfulTerraformCommand)
 				stdout, err = client.Init()
 			})
@@ -265,7 +341,10 @@ var _ = Describe("Client", func() {
 
 		Context("When everything does ok", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = validTerraformConfig
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(validTerraformConfig)
 				client.Command = new(SuccessfulTerraformCommand)
 				stdout, err = client.Plan()
 			})
@@ -293,7 +372,10 @@ var _ = Describe("Client", func() {
 
 		Context("With invalid Terraform config", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = invalidTerraformConfig
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(invalidTerraformConfig)
 				client.Command = new(FailingTerraformCommand)
 				stdout, err = client.Plan()
 			})
@@ -318,7 +400,10 @@ var _ = Describe("Client", func() {
 
 		Context("With no Terraform config", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = emptyTerraformConfig
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(emptyTerraformConfig)
 				client.Command = new(SuccessfulTerraformCommand)
 				stdout, err = client.Plan()
 			})
@@ -343,8 +428,11 @@ var _ = Describe("Client", func() {
 
 		Context("With valid Terraform config and valid Terraform state", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = validTerraformConfig
-				client.Terraform.State = validTerraformState
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(validTerraformConfig)
+				client.SetState(validTerraformState)
 				client.Command = new(SuccessfulTerraformCommand)
 				stdout, err = client.Plan()
 			})
@@ -376,8 +464,11 @@ var _ = Describe("Client", func() {
 
 		Context("With valid Terraform config and invalid Terraform state", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = validTerraformConfig
-				client.Terraform.State = invalidTerraformState
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(validTerraformConfig)
+				client.SetState(invalidTerraformState)
 				client.Command = new(FailingTerraformCommand)
 				stdout, err = client.Plan()
 			})
@@ -406,8 +497,11 @@ var _ = Describe("Client", func() {
 
 		Context("With valid Terraform config and no Terraform state", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = validTerraformConfig
-				client.Terraform.State = emptyTerraformState
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(validTerraformConfig)
+				client.SetState(emptyTerraformState)
 				client.Command = new(SuccessfulTerraformCommand)
 				stdout, err = client.Plan()
 			})
@@ -453,8 +547,11 @@ var _ = Describe("Client", func() {
 
 		Context("When everything does ok", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = validTerraformConfig
-				client.Terraform.State = validTerraformState
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(validTerraformConfig)
+				client.SetState(validTerraformState)
 				client.Command = new(SuccessfulTerraformCommand)
 				state, stdout, err = client.Apply()
 			})
@@ -474,6 +571,9 @@ var _ = Describe("Client", func() {
 
 		Context("With no Terraform config", func() {
 			BeforeEach(func() {
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
 				client.Terraform.Config = emptyTerraformConfig
 				client.Command = new(FailingTerraformCommand)
 				state, stdout, err = client.Apply()
@@ -494,8 +594,11 @@ var _ = Describe("Client", func() {
 
 		Context("With valid Terraform config and invalid Terraform state", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = validTerraformConfig
-				client.Terraform.State = invalidTerraformState
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(validTerraformConfig)
+				client.SetState(invalidTerraformState)
 				client.Command = new(FailingTerraformCommand)
 				state, stdout, err = client.Apply()
 			})
@@ -515,8 +618,11 @@ var _ = Describe("Client", func() {
 
 		Context("With valid Terraform config and no Terraform state", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = validTerraformConfig
-				client.Terraform.State = emptyTerraformState
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(validTerraformConfig)
+				client.SetState(emptyTerraformState)
 				client.Command = new(SuccessfulTerraformCommand)
 				state, stdout, err = client.Apply()
 			})
@@ -536,8 +642,11 @@ var _ = Describe("Client", func() {
 
 		Context("With invalid Terraform config and valid Terraform state", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = invalidTerraformConfig
-				client.Terraform.State = validTerraformState
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(invalidTerraformConfig)
+				client.SetState(validTerraformState)
 				client.Command = new(FailingTerraformCommand)
 				state, stdout, err = client.Apply()
 			})
@@ -557,8 +666,11 @@ var _ = Describe("Client", func() {
 
 		Context("With invalid Terraform config and invalid Terraform state", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = invalidTerraformConfig
-				client.Terraform.State = invalidTerraformState
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(invalidTerraformConfig)
+				client.SetState(invalidTerraformState)
 				client.Command = new(FailingTerraformCommand)
 				state, stdout, err = client.Apply()
 			})
@@ -578,8 +690,11 @@ var _ = Describe("Client", func() {
 
 		Context("With invalid Terraform config and no Terraform state", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = invalidTerraformConfig
-				client.Terraform.State = emptyTerraformState
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(invalidTerraformConfig)
+				client.SetState(emptyTerraformState)
 				client.Command = new(FailingTerraformCommand)
 				state, stdout, err = client.Apply()
 			})
@@ -613,8 +728,11 @@ var _ = Describe("Client", func() {
 
 		Context("When everything does ok", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = validTerraformConfig
-				client.Terraform.State = validTerraformState
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(validTerraformConfig)
+				client.SetState(validTerraformState)
 				client.Command = new(SuccessfulTerraformCommand)
 				state, stdout, err = client.Destroy()
 			})
@@ -634,7 +752,10 @@ var _ = Describe("Client", func() {
 
 		Context("With no Terraform config", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = emptyTerraformConfig
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(emptyTerraformConfig)
 				client.Command = new(FailingTerraformCommand)
 				state, stdout, err = client.Destroy()
 			})
@@ -654,8 +775,11 @@ var _ = Describe("Client", func() {
 
 		Context("With valid Terraform config and invalid Terraform state", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = validTerraformConfig
-				client.Terraform.State = invalidTerraformState
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(validTerraformConfig)
+				client.SetState(invalidTerraformState)
 				client.Command = new(FailingTerraformCommand)
 				state, stdout, err = client.Destroy()
 			})
@@ -675,8 +799,11 @@ var _ = Describe("Client", func() {
 
 		Context("With valid Terraform config and no Terraform state", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = validTerraformConfig
-				client.Terraform.State = emptyTerraformState
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(validTerraformConfig)
+				client.SetState(emptyTerraformState)
 				client.Command = new(SuccessfulTerraformCommand)
 				state, stdout, err = client.Destroy()
 			})
@@ -696,8 +823,11 @@ var _ = Describe("Client", func() {
 
 		Context("With invalid Terraform config and valid Terraform state", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = invalidTerraformConfig
-				client.Terraform.State = validTerraformState
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(invalidTerraformConfig)
+				client.SetState(validTerraformState)
 				client.Command = new(FailingTerraformCommand)
 				state, stdout, err = client.Destroy()
 			})
@@ -717,8 +847,11 @@ var _ = Describe("Client", func() {
 
 		Context("With invalid Terraform config and invalid Terraform state", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = invalidTerraformConfig
-				client.Terraform.State = invalidTerraformState
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(invalidTerraformConfig)
+				client.SetState(invalidTerraformState)
 				client.Command = new(FailingTerraformCommand)
 				state, stdout, err = client.Destroy()
 			})
@@ -738,8 +871,11 @@ var _ = Describe("Client", func() {
 
 		Context("With invalid Terraform config and no Terraform state", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = invalidTerraformConfig
-				client.Terraform.State = emptyTerraformState
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(invalidTerraformConfig)
+				client.SetState(emptyTerraformState)
 				client.Command = new(FailingTerraformCommand)
 				state, stdout, err = client.Destroy()
 			})
@@ -773,8 +909,11 @@ var _ = Describe("Client", func() {
 
 		Context("When everything does ok", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = validTerraformConfig
-				client.Terraform.State = validTerraformState
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(validTerraformConfig)
+				client.SetState(validTerraformState)
 				client.Command = new(SuccessfulTerraformCommand)
 				outputs, err = client.Outputs()
 			})
@@ -791,8 +930,11 @@ var _ = Describe("Client", func() {
 
 		Context("When no outputs are defined in the Terraform state", func() {
 			BeforeEach(func() {
-				client.Terraform.Config = validNoOutputsTerraformConfig
-				client.Terraform.State = validNoOutputsTerraformState
+				client.SetProject(validProject)
+				client.SetRegion(validRegion)
+				client.SetCredentials(validCredentials)
+				client.SetConfig(validNoOutputsTerraformConfig)
+				client.SetState(validNoOutputsTerraformState)
 				client.Command = new(FailingTerraformCommand)
 				outputs, err = client.Outputs()
 			})
@@ -834,9 +976,13 @@ var _ = Describe("Client", func() {
 
 })
 
-type SuccessfulTerraformCommand struct{}
+type SuccessfulTerraformCommand struct {
+	Project     string
+	Region      string
+	Credentials string
+}
 
-func (tc *SuccessfulTerraformCommand) Run(directory string, args []string) (error, string, string) {
+func (tc *SuccessfulTerraformCommand) Run(directory string, args []string, project string, region string, credentials string) (error, string, string) {
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -880,9 +1026,13 @@ func (tc *SuccessfulTerraformCommand) Run(directory string, args []string) (erro
 	return nil, stdout.String(), stderr.String()
 }
 
-type FailingTerraformCommand struct{}
+type FailingTerraformCommand struct {
+	Project     string
+	Region      string
+	Credentials string
+}
 
-func (tc *FailingTerraformCommand) Run(directory string, args []string) (error, string, string) {
+func (tc *FailingTerraformCommand) Run(directory string, args []string, project string, region string, credentials string) (error, string, string) {
 
 	err := new(exec.ExitError)
 	var stdout bytes.Buffer

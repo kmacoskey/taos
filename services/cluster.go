@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/kmacoskey/taos/app"
 	"github.com/kmacoskey/taos/models"
 	log "github.com/sirupsen/logrus"
 )
@@ -13,7 +14,7 @@ type clusterDao interface {
 	GetCluster(db *sqlx.DB, id string, requestId string) (*models.Cluster, error)
 	GetClusters(db *sqlx.DB, requestId string) ([]models.Cluster, error)
 	GetExpiredClusters(db *sqlx.DB, requestId string) ([]models.Cluster, error)
-	CreateCluster(db *sqlx.DB, config []byte, timeout string, requestId string) (*models.Cluster, error)
+	CreateCluster(db *sqlx.DB, config []byte, timeout string, requestId string, project string, region string) (*models.Cluster, error)
 	UpdateClusterField(db *sqlx.DB, id string, field string, value interface{}, requestId string) error
 }
 
@@ -22,6 +23,12 @@ type TerraformClient interface {
 	SetConfig([]byte)
 	State() []byte
 	SetState([]byte)
+	Project() string
+	SetProject(string)
+	Region() string
+	SetRegion(string)
+	Credentials() string
+	SetCredentials(string)
 	ClientInit() error
 	ClientDestroy() error
 	Init() (string, error)
@@ -58,13 +65,21 @@ func (s *ClusterService) GetExpiredClusters(request_id string) ([]models.Cluster
 	return clusters, err
 }
 
-func (s *ClusterService) CreateCluster(terraform_config []byte, timeout string, request_id string, client TerraformClient) (*models.Cluster, error) {
+func (s *ClusterService) CreateCluster(terraform_config []byte, timeout string, project string, region string, request_id string, client TerraformClient) (*models.Cluster, error) {
 	logger := log.WithFields(log.Fields{"package": "services", "event": "create_cluster", "request": request_id})
 	logger.Info("servicing request to create cluster")
-	cluster, err := s.dao.CreateCluster(s.db, terraform_config, timeout, request_id)
+	cluster, err := s.dao.CreateCluster(s.db, terraform_config, timeout, request_id, project, region)
 	if err != nil {
 		return cluster, err
 	}
+	credentials := app.GlobalServerConfig.Credentials(project)
+	if len(credentials) == 0 {
+		logger.Error(models.CredentialsNotFound)
+	}
+
+	client.SetCredentials(credentials)
+	client.SetProject(project)
+	client.SetRegion(region)
 
 	// Cluster with requested action is returned and eventual cluster status
 	//  is handled in the terraform service asynchronously
@@ -104,6 +119,15 @@ func (s *ClusterService) DeleteCluster(request_id string, client TerraformClient
 		logger.Error(err.Error())
 		return cluster, err
 	}
+
+	credentials := app.GlobalServerConfig.Credentials(cluster.Project)
+	if len(credentials) == 0 {
+		logger.Error(models.CredentialsNotFound)
+	}
+
+	client.SetCredentials(credentials)
+	client.SetProject(cluster.Project)
+	client.SetRegion(cluster.Region)
 
 	// Cluster with requested action is returned and eventual cluster status
 	//  is handled in the terraform service asynchronously
@@ -170,23 +194,28 @@ func (s *ClusterService) TerraformDestroyCluster(client TerraformClient, cluster
 }
 
 func (s *ClusterService) TerraformProvisionCluster(client TerraformClient, cluster *models.Cluster, config []byte, requestId string) *models.Cluster {
-	logger := log.WithFields(log.Fields{"package": "services", "event": "create_cluster", "request": requestId})
+	logger := log.WithFields(log.Fields{"package": "services", "event": "terraform_provision", "request": requestId})
 
 	client.SetConfig(config)
 
 	cluster.Status = models.ClusterStatusProvisionStart
 	err := s.dao.UpdateClusterField(s.db, cluster.Id, "status", cluster.Status, requestId)
 	if err != nil {
-		logger.Error(err.Error())
+		logger.Error(models.ClusterUpdateFailed)
 	}
 
 	err = client.ClientInit()
 	if err != nil {
+		logger.Error(models.ClusterProvisioningFailed)
 		cluster.Status = models.ClusterStatusProvisionFailed
-		logger.Error(err.Error())
+		cluster.Message = err.Error()
 		err := s.dao.UpdateClusterField(s.db, cluster.Id, "status", cluster.Status, requestId)
 		if err != nil {
-			logger.Error(err.Error())
+			logger.Error(models.ClusterUpdateFailed)
+		}
+		err = s.dao.UpdateClusterField(s.db, cluster.Id, "message", cluster.Message, requestId)
+		if err != nil {
+			logger.Error(models.ClusterUpdateFailed)
 		}
 		return cluster
 	}

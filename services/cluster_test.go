@@ -38,6 +38,9 @@ var _ = Describe("Cluster", func() {
 		validTimeout                  string
 		invalidTerraformConfig        []byte
 		validNoOutputsTerraformConfig []byte
+		validProject                  string
+		validRegion                   string
+		terraformClient               TerraformClient
 	)
 
 	BeforeEach(func() {
@@ -46,6 +49,8 @@ var _ = Describe("Cluster", func() {
 		// Create a new RequestContext for each test
 		rc = app.RequestContext{}
 
+		validProject = "valid-project-name"
+		validRegion = "valid-region"
 		validTimeout = "10m"
 		validTerraformConfig = []byte(`{"provider":{"google":{"project":"data-gp-toolsmiths","region":"us-central1"}},"output":{"foo":{"value":"bar"}}}`)
 		validNoOutputsTerraformConfig = []byte(`{"provider":{"google":{"project":"data-gp-toolsmiths","region":"us-central1"}}}`)
@@ -57,6 +62,8 @@ var _ = Describe("Cluster", func() {
 			Name:            "cluster",
 			Status:          "status",
 			TerraformConfig: []byte(`{"provider":{"google":{}}}`),
+			Project:         validProject,
+			Region:          validRegion,
 		}
 
 		cluster2UUID = "a19e2bfe-0ec5-11e8-ba89-0ed5f89f718b"
@@ -65,6 +72,8 @@ var _ = Describe("Cluster", func() {
 			Name:            "cluster",
 			Status:          "status",
 			TerraformConfig: []byte(`{"provider":{"google":{}}}`),
+			Project:         validProject,
+			Region:          validRegion,
 		}
 
 		validRequestId = "ff459ef4-514b-11e8-9c2d-fa7ae01bbebc"
@@ -84,8 +93,8 @@ var _ = Describe("Cluster", func() {
 			BeforeEach(func() {
 				clustersMap := make(map[string]*models.Cluster)
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
-				client := new(PassingClient)
-				cluster, err = cs.CreateCluster(validTerraformConfig, validTimeout, validRequestId, client)
+				terraformClient = new(PassingClient)
+				cluster, err = cs.CreateCluster(validTerraformConfig, validTimeout, validProject, validRegion, validRequestId, terraformClient)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -93,13 +102,19 @@ var _ = Describe("Cluster", func() {
 			It("Should return a cluster", func() {
 				Expect(cluster).NotTo(BeNil())
 			})
+			It("Should set the project of the terraform client", func() {
+				Expect(terraformClient.Project()).To(Equal(validProject))
+			})
+			It("Should set the region of the terraform client", func() {
+				Expect(terraformClient.Region()).To(Equal(validRegion))
+			})
 		})
 
 		Context("When a cluster is not returned from the dao", func() {
 			BeforeEach(func() {
 				cs = NewClusterService(NewEmptyClusterDao(), NewMockDB().db)
 				client := new(FailingClient)
-				cluster, err = cs.CreateCluster(validTerraformConfig, validTimeout, validRequestId, client)
+				cluster, err = cs.CreateCluster(validTerraformConfig, validTimeout, validRequestId, validProject, validRegion, client)
 			})
 			It("Should error", func() {
 				Expect(err).Should(HaveOccurred())
@@ -114,7 +129,7 @@ var _ = Describe("Cluster", func() {
 				clustersMap := make(map[string]*models.Cluster)
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
 				client := new(PassingClient)
-				cluster, err = cs.CreateCluster(invalidTerraformConfig, validTimeout, validRequestId, client)
+				cluster, err = cs.CreateCluster(invalidTerraformConfig, validTimeout, validRequestId, validProject, validRegion, client)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -129,7 +144,7 @@ var _ = Describe("Cluster", func() {
 				clustersMap := make(map[string]*models.Cluster)
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
 				client := new(FailingClient)
-				cluster, err = cs.CreateCluster(validNoOutputsTerraformConfig, validTimeout, validRequestId, client)
+				cluster, err = cs.CreateCluster(validNoOutputsTerraformConfig, validTimeout, validRequestId, validProject, validRegion, client)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -274,11 +289,17 @@ var _ = Describe("Cluster", func() {
 				clustersMap := make(map[string]*models.Cluster)
 				clustersMap[cluster1UUID] = cluster1
 				cs = NewClusterService(NewValidClusterDao(clustersMap), NewMockDB().db)
-				client := new(PassingClient)
-				cluster, err = cs.DeleteCluster(validRequestId, client, cluster1UUID)
+				terraformClient = new(PassingClient)
+				cluster, err = cs.DeleteCluster(validRequestId, terraformClient, cluster1UUID)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
+			})
+			It("Should set the project of the terraform client", func() {
+				Expect(terraformClient.Project()).To(Equal(validProject))
+			})
+			It("Should set the region of the terraform client", func() {
+				Expect(terraformClient.Region()).To(Equal(validRegion))
 			})
 			It("Should return the expected cluster", func() {
 				Expect(cluster.Id).To(Equal(cluster1.Id))
@@ -320,7 +341,6 @@ var _ = Describe("Cluster", func() {
 			})
 		})
 	})
-
 })
 
 func NewMockDB() *MockDB {
@@ -331,17 +351,28 @@ type MockDB struct {
 	db *sqlx.DB
 }
 
-type PassingClient struct{ Terraform terraform.TerraformInfra }
+type PassingClient struct {
+	Terraform   terraform.TerraformInfra
+	project     string
+	region      string
+	credentials string
+}
 
-func (client *PassingClient) ClientInit() error        { return nil }
-func (client *PassingClient) ClientDestroy() error     { return nil }
-func (client *PassingClient) Config() []byte           { return []byte(`json`) }
-func (client *PassingClient) SetConfig(config []byte)  { return }
-func (client *PassingClient) State() []byte            { return []byte(`json`) }
-func (client *PassingClient) SetState(state []byte)    { return }
-func (client *PassingClient) Init() (string, error)    { return "foo", nil }
-func (client *PassingClient) Plan() (string, error)    { return "foo", nil }
-func (client *PassingClient) Outputs() (string, error) { return validTerraformOutputs, nil }
+func (client *PassingClient) ClientInit() error                 { return nil }
+func (client *PassingClient) ClientDestroy() error              { return nil }
+func (client *PassingClient) Config() []byte                    { return []byte(`json`) }
+func (client *PassingClient) SetConfig(config []byte)           { return }
+func (client *PassingClient) State() []byte                     { return []byte(`json`) }
+func (client *PassingClient) SetState(state []byte)             { return }
+func (client *PassingClient) Project() string                   { return client.project }
+func (client *PassingClient) SetProject(project string)         { client.project = project }
+func (client *PassingClient) Region() string                    { return client.region }
+func (client *PassingClient) SetRegion(region string)           { client.region = region }
+func (client *PassingClient) Credentials() string               { return client.credentials }
+func (client *PassingClient) SetCredentials(credentials string) { client.credentials = credentials }
+func (client *PassingClient) Init() (string, error)             { return "foo", nil }
+func (client *PassingClient) Plan() (string, error)             { return "foo", nil }
+func (client *PassingClient) Outputs() (string, error)          { return validTerraformOutputs, nil }
 func (client *PassingClient) Apply() ([]byte, string, error) {
 	return validTerraformState, terraform.ApplySuccess, nil
 }
@@ -349,17 +380,23 @@ func (client *PassingClient) Destroy() ([]byte, string, error) { return []byte(`
 
 type FailingClient struct{}
 
-func (client *FailingClient) ClientInit() error                { return errors.New("foo") }
-func (client *FailingClient) ClientDestroy() error             { return errors.New("foo") }
-func (client *FailingClient) Config() []byte                   { return []byte(`json`) }
-func (client *FailingClient) SetConfig(config []byte)          { return }
-func (client *FailingClient) State() []byte                    { return []byte(`json`) }
-func (client *FailingClient) SetState(state []byte)            { return }
-func (client *FailingClient) Init() (string, error)            { return "foo", errors.New("foo") }
-func (client *FailingClient) Plan() (string, error)            { return "foo", errors.New("foo") }
-func (client *FailingClient) Outputs() (string, error)         { return "", errors.New("foo") }
-func (client *FailingClient) Apply() ([]byte, string, error)   { return nil, "", errors.New("") }
-func (client *FailingClient) Destroy() ([]byte, string, error) { return nil, "", errors.New("foo") }
+func (client *FailingClient) ClientInit() error                 { return errors.New("foo") }
+func (client *FailingClient) ClientDestroy() error              { return errors.New("foo") }
+func (client *FailingClient) Config() []byte                    { return []byte(`json`) }
+func (client *FailingClient) SetConfig(config []byte)           { return }
+func (client *FailingClient) State() []byte                     { return []byte(`json`) }
+func (client *FailingClient) SetState(state []byte)             { return }
+func (client *FailingClient) Init() (string, error)             { return "foo", errors.New("foo") }
+func (client *FailingClient) Plan() (string, error)             { return "foo", errors.New("foo") }
+func (client *FailingClient) Outputs() (string, error)          { return "", errors.New("foo") }
+func (client *FailingClient) Apply() ([]byte, string, error)    { return nil, "", errors.New("") }
+func (client *FailingClient) Destroy() ([]byte, string, error)  { return nil, "", errors.New("foo") }
+func (client *FailingClient) Project() string                   { return "" }
+func (client *FailingClient) SetProject(project string)         { return }
+func (client *FailingClient) Region() string                    { return "" }
+func (client *FailingClient) SetRegion(region string)           { return }
+func (client *FailingClient) Credentials() string               { return "" }
+func (client *FailingClient) SetCredentials(credentials string) { return }
 
 type ValidClusterDao struct {
 	clustersMap map[string]*models.Cluster
@@ -371,7 +408,7 @@ func NewValidClusterDao(cm map[string]*models.Cluster) *ValidClusterDao {
 	}
 }
 
-func (dao *ValidClusterDao) CreateCluster(db *sqlx.DB, config []byte, timeout string, requestId string) (*models.Cluster, error) {
+func (dao *ValidClusterDao) CreateCluster(db *sqlx.DB, config []byte, timeout string, requestId string, project string, region string) (*models.Cluster, error) {
 	uuid := uuid.Must(uuid.NewV4()).String()
 	dao.clustersMap[uuid] = &models.Cluster{
 		Id:              uuid,
@@ -438,7 +475,7 @@ func NewEmptyClusterDao() *EmptyClusterDao {
 	return &EmptyClusterDao{}
 }
 
-func (dao *EmptyClusterDao) CreateCluster(db *sqlx.DB, config []byte, timeout string, requestId string) (*models.Cluster, error) {
+func (dao *EmptyClusterDao) CreateCluster(db *sqlx.DB, config []byte, timeout string, requestId string, project string, region string) (*models.Cluster, error) {
 	return nil, errors.New("foo")
 }
 

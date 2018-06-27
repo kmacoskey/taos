@@ -8,6 +8,10 @@ import (
 
 var GlobalServerConfig ServerConfig
 
+type Configuration interface {
+	Credentials(string) string
+}
+
 type ServerConfig struct {
 	// Required - Defaults to 8080 - Listen and Serve port
 	ServerPort string `mapstructure:"server_port"`
@@ -23,6 +27,9 @@ type ServerConfig struct {
 
 	// Logrus Configuration
 	Logging LoggingConfig
+
+	// Cloud Project Configuration
+	Clouds map[string]CloudProjectConfig
 }
 
 type LoggingConfig struct {
@@ -32,6 +39,17 @@ type LoggingConfig struct {
 	// Optional - Defaults to Text - Only log when greater then set level
 	// Possible Level: Debug, Info, Warning, Error, Fatal and Panic
 	Level string `mapstructure:"log_level"`
+}
+
+type CloudProjectConfig struct {
+	// Required - No Default - Project to provision within
+	Project string `mapstructure:"project"`
+
+	// Required - No Default - Credentials used to Terraform for the given Project
+	Credentials string `mapstructure:"credentials"`
+
+	// Required - No Default - Default cloud region to set when performing Terraform actions
+	Region string `mapstructure:"region"`
 }
 
 // Load the server configuration from ConfigPath/Name.Type or from the ENV with TAOS_[var]
@@ -62,4 +80,13 @@ func LoadServerConfig(config *ServerConfig, path string) error {
 	// TODO: Validate configuration values
 
 	return nil
+}
+
+func (config *ServerConfig) Credentials(project string) string {
+	val, exists := config.Clouds[project]
+	if !exists {
+		return ""
+	}
+
+	return val.Credentials
 }

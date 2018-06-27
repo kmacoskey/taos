@@ -43,7 +43,7 @@ var _ = Describe("Taos", func() {
 		// Expect(err).NotTo(HaveOccurred())
 		log.SetLevel(log.FatalLevel)
 
-		valid_terraform_config = []byte(`{"config":"{\"provider\":{\"google\":{\"project\":\"data-gp-toolsmiths\",\"region\":\"us-central1\"}},\"output\":{\"foo\":{\"value\":\"bar\"}}}","timeout":"5s"}`)
+		valid_terraform_config = []byte(`{"config":"{\"provider\":{\"google\":{\"project\":\"data-gp-toolsmiths\",\"region\":\"us-central1\"}},\"output\":{\"foo\":{\"value\":\"bar\"}}}","timeout":"5s","project":"data-gp-toolsmiths","region":"region_name"}`)
 
 		expected_terraform_outputs = make(map[string]handlers.TerraformOutput)
 		expected_terraform_outputs["foo"] = handlers.TerraformOutput{
@@ -172,7 +172,7 @@ var _ = Describe("Taos", func() {
 			// Note, this test is a bit loaded in it's concerns
 			//  in order to limit the individual specs. It is slow
 			//  when testing actually runs terraform.
-			It("Should return a successfully cluster", func() {
+			It("Should return successfully", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(response.StatusCode).To(Equal(http.StatusAccepted))
 				Expect(response.Header.Get("Content-Type")).To(Equal("application/json"))

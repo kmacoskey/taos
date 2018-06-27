@@ -15,6 +15,8 @@ type Cluster struct {
 	Timestamp       time.Time `json:"timestamp" db:"timestamp"`
 	Expiration      time.Time `json:"expiration" db:"expiration"`
 	Timeout         string    `json:"timeout" db:"timeout"`
+	Project         string    `json:"project" db:"project"`
+	Region          string    `json:"region" db:"region"`
 }
 
 type Output struct {
@@ -31,4 +33,7 @@ const (
 	ClusterStatusDestroying       = "destroying"
 	ClusterStatusDestroyed        = "destroyed"
 	ClusterStatusDestroyFailed    = "destruction_failed"
+	ClusterUpdateFailed           = "failed to update cluster"
+	ClusterProvisioningFailed     = "failed to provision cluster"
+	CredentialsNotFound           = "credentials not found for the given project"
 )

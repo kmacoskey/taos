@@ -2,6 +2,7 @@ package terraform
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -12,16 +13,31 @@ import (
 )
 
 type TerraformCommandRunner interface {
-	Run(string, []string) (error, string, string)
+	Run(string, []string, string, string, string) (error, string, string)
 }
 
 type TerraformCommand struct{}
 
-func (tc TerraformCommand) Run(directory string, args []string) (error, string, string) {
+func (tc TerraformCommand) Run(directory string, args []string, project string, region string, credentials string) (error, string, string) {
 	logger := log.WithFields(log.Fields{"package": "terraform", "event": "run_command"})
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
+
+	if len(project) == 0 {
+		err := errors.New("project not set when attempting to run terraform command")
+		return err, "", ""
+	}
+
+	if len(region) == 0 {
+		err := errors.New("region not set when attempting to run terraform command")
+		return err, "", ""
+	}
+
+	if len(credentials) == 0 {
+		err := errors.New("credentials not set when attempting to run terraform command")
+		return err, "", ""
+	}
 
 	defaultArgs := []string{
 		"-no-color",

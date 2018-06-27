@@ -23,7 +23,7 @@ type clusterService interface {
 	GetCluster(request_id string, id string) (*models.Cluster, error)
 	GetClusters(request_id string) ([]models.Cluster, error)
 	GetExpiredClusters(requestId string) ([]models.Cluster, error)
-	CreateCluster(terraform_config []byte, timeout string, request_id string, client services.TerraformClient) (*models.Cluster, error)
+	CreateCluster(terraform_config []byte, timeout string, project string, region string, request_id string, client services.TerraformClient) (*models.Cluster, error)
 	DeleteCluster(request_id string, client services.TerraformClient, id string) (*models.Cluster, error)
 }
 
@@ -106,7 +106,7 @@ func (ch *ClusterHandler) CreateCluster() app.Adapter {
 
 			logger.Info(fmt.Sprintf("new request to create cluster '%+v'", cluster_request))
 
-			cluster, err := ch.service.CreateCluster([]byte(cluster_request.TerraformConfig), cluster_request.Timeout, context.RequestId(), terraform.NewTerraformClient())
+			cluster, err := ch.service.CreateCluster([]byte(cluster_request.TerraformConfig), cluster_request.Timeout, cluster_request.Project, cluster_request.Region, context.RequestId(), terraform.NewTerraformClient())
 
 			// Currently no expectation for the situation that
 			// err == nil && cluster == nil
