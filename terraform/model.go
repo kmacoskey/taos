@@ -19,8 +19,14 @@ const (
 	ErrorInvalidConfig      = "The Terraform configuration must be valid before initialization"
 	ErrorMissingOutputs     = "The state file either has no outputs defined, or all the defined\noutputs are empty."
 	ErrorBadState           = "Error refreshing state:"
-	InitSuccess             = "Terraform has been successfully initialized!"
-	PlanNoChangesSuccess    = "No changes. Infrastructure is up-to-date."
-	ApplySuccess            = "Apply complete! Resources:"
-	DestroySuccess          = "Destroy complete! Resources: 0 destroyed."
+	// Expected substrings in stdout from Terraform execution
+	InitBegin            = "Initializing provider plugins"
+	InitSuccess          = "Terraform has been successfully initialized!"
+	PlanBegin            = "Refreshing Terraform state in-memory prior to plan"
+	PlanSuccess          = "Terraform will perform the following actions"
+	PlanNoChangesSuccess = "No changes. Infrastructure is up-to-date."
+	ApplySuccess         = "Apply complete! Resources:"
+	ApplyFail            = "Error applying plan"
+	DestroySuccess       = "Destroy complete! Resources: 0 destroyed."
+	DestroyFail          = "Error applying plan"
 )
