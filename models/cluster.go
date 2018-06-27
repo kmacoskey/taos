@@ -36,4 +36,11 @@ const (
 	ClusterUpdateFailed           = "failed to update cluster"
 	ClusterProvisioningFailed     = "failed to provision cluster"
 	CredentialsNotFound           = "credentials not found for the given project"
+	ErrorMissingConfig            = "missing cluster config"
+	ErrorMissingTimeout           = "missing cluster timeout"
+	ErrorMissingProject           = "missing cluster project"
+	ErrorMissingRegion            = "missing cluster region"
+	ErrorMissingRequestId         = "missing request id"
+	ErrorMissingId                = "missing id"
+	ErrorInvalidTimeout           = "invalid cluster timeout"
 )

@@ -21,32 +21,32 @@ func (dao *ClusterDao) CreateCluster(db *sqlx.DB, config []byte, timeout string,
 	logger := log.WithFields(log.Fields{"package": "daos", "event": "create_cluster", "request": requestId})
 
 	if len(config) == 0 {
-		err := errors.New("cannot create cluster without config")
+		err := errors.New(models.ErrorMissingConfig)
 		logger.Error(err)
 		return nil, err
 	}
 
 	if len(timeout) == 0 {
-		err := errors.New("cannot create cluster without timeout")
+		err := errors.New(models.ErrorMissingTimeout)
 		logger.Error(err)
 		return nil, err
 	}
 
 	if len(project) == 0 {
-		err := errors.New("cannot create cluster without project")
+		err := errors.New(models.ErrorMissingProject)
 		logger.Error(err)
 		return nil, err
 	}
 
 	if len(region) == 0 {
-		err := errors.New("cannot create cluster without region")
+		err := errors.New(models.ErrorMissingRegion)
 		logger.Error(err)
 		return nil, err
 	}
 
 	timeout_duration, err := time.ParseDuration(timeout)
 	if err != nil {
-		err := errors.New("cannot create cluster without valid timeout")
+		err := errors.New(models.ErrorInvalidTimeout)
 		logger.Error(err)
 		return nil, err
 	}
@@ -115,13 +115,13 @@ func (dao *ClusterDao) GetCluster(db *sqlx.DB, id string, requestId string) (*mo
 	cluster := models.Cluster{}
 
 	if len(requestId) == 0 {
-		err := errors.New("cannot get cluster without requestId")
+		err := errors.New(models.ErrorMissingRequestId)
 		logger.Error(err)
 		return nil, err
 	}
 
 	if len(id) == 0 {
-		err := errors.New("cannot get cluster without id")
+		err := errors.New(models.ErrorMissingId)
 		logger.Error(err)
 		return nil, err
 	}
@@ -153,7 +153,7 @@ func (dao *ClusterDao) GetClusters(db *sqlx.DB, requestId string) ([]models.Clus
 	logger := log.WithFields(log.Fields{"package": "daos", "event": "get_clusters", "request": requestId})
 
 	if len(requestId) == 0 {
-		err := errors.New("cannot get cluster without requestId")
+		err := errors.New(models.ErrorMissingRequestId)
 		logger.Error(err)
 		return nil, err
 	}
@@ -194,7 +194,7 @@ func (dao *ClusterDao) GetExpiredClusters(db *sqlx.DB, requestId string) ([]mode
 	logger := log.WithFields(log.Fields{"package": "daos", "event": "get_expired_clusters", "request": requestId})
 
 	if len(requestId) == 0 {
-		err := errors.New("cannot get cluster without requestId")
+		err := errors.New(models.ErrorMissingRequestId)
 		logger.Error(err)
 		return nil, err
 	}
