@@ -229,10 +229,24 @@ func (s *ClusterService) TerraformProvisionCluster(client TerraformClient, clust
 		if err != nil {
 			logger.Error(err.Error())
 		}
+
+		// Attempt to rollback
+		rollback_state, rollback_stdout, err := client.Destroy()
+		if err != nil {
+			cluster.Status = models.ClusterStatusProvisionFailedRollbackFailed
+			cluster.Message = cluster.Message + "\n" + err.Error()
+			logger.Error(err.Error())
+		} else {
+			cluster.Status = models.ClusterStatusProvisionFailedRollbackSuccess
+			cluster.Message = cluster.Message + "\n" + rollback_stdout
+			cluster.TerraformState = rollback_state
+		}
+
 		err = s.dao.UpdateClusterField(s.db, cluster.Id, "message", cluster.Message, requestId)
 		if err != nil {
 			logger.Error(err.Error())
 		}
+
 		return cluster
 	}
 
