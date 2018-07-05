@@ -28,7 +28,7 @@ var (
 				message 					text,
 				outputs 					json,
 				terraform_state 	json,
-				terraform_config 	json,
+				terraform_config 	text,
 				timestamp 				timestamp,
 				expiration 				timestamp,
 				timeout           text,
@@ -611,17 +611,6 @@ var _ = Describe("Cluster", func() {
 				seed_err := seedDatabaseWithCluster(cluster_1)
 				Expect(seed_err).NotTo(HaveOccurred())
 				err = dao.UpdateClusterField(valid_db, cluster_1.Id, "not-a-field", "", valid_request_id)
-			})
-			It("Should error", func() {
-				Expect(err).To(HaveOccurred())
-			})
-		})
-
-		Context("When updating a field with the wrong type", func() {
-			BeforeEach(func() {
-				seed_err := seedDatabaseWithCluster(cluster_1)
-				Expect(seed_err).NotTo(HaveOccurred())
-				err = dao.UpdateClusterField(valid_db, cluster_1.Id, "terraform_config", "not-a-byte-slice", valid_request_id)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
