@@ -73,7 +73,7 @@ func (f *CustomFormatter) printColored(b *bytes.Buffer, entry *log.Entry, keys [
 		fmt.Fprintf(b, " \x1b[%dm%s\x1b[0m=", levelColor, k)
 		f.appendValue(b, v)
 	}
-	fmt.Fprintf(b, "\n\n\x1b[%dm%-10s%s\x1b[0m\n", levelColor, " ", entry.Message)
+	fmt.Fprintf(b, "\n\n\x1b[%dm%s%s\x1b[0m\n", levelColor, " ", entry.Message)
 }
 
 func (f *CustomFormatter) Format(entry *log.Entry) ([]byte, error) {
