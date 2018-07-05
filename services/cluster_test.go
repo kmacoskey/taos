@@ -371,7 +371,7 @@ func (client *PassingClient) SetRegion(region string)           { client.region 
 func (client *PassingClient) Credentials() string               { return client.credentials }
 func (client *PassingClient) SetCredentials(credentials string) { client.credentials = credentials }
 func (client *PassingClient) Init() (string, error)             { return "foo", nil }
-func (client *PassingClient) Plan() (string, error)             { return "foo", nil }
+func (client *PassingClient) Plan(destroy bool) (string, error) { return "foo", nil }
 func (client *PassingClient) Outputs() (string, error)          { return validTerraformOutputs, nil }
 func (client *PassingClient) Apply() ([]byte, string, error) {
 	return validTerraformState, terraform.ApplySuccess, nil
@@ -387,7 +387,7 @@ func (client *FailingClient) SetConfig(config []byte)           { return }
 func (client *FailingClient) State() []byte                     { return []byte(`json`) }
 func (client *FailingClient) SetState(state []byte)             { return }
 func (client *FailingClient) Init() (string, error)             { return "foo", errors.New("foo") }
-func (client *FailingClient) Plan() (string, error)             { return "foo", errors.New("foo") }
+func (client *FailingClient) Plan(destroy bool) (string, error) { return "foo", errors.New("foo") }
 func (client *FailingClient) Outputs() (string, error)          { return "", errors.New("foo") }
 func (client *FailingClient) Apply() ([]byte, string, error)    { return nil, "", errors.New("") }
 func (client *FailingClient) Destroy() ([]byte, string, error)  { return nil, "", errors.New("foo") }

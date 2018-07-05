@@ -346,7 +346,7 @@ var _ = Describe("Client", func() {
 				client.SetCredentials(validCredentials)
 				client.SetConfig(validTerraformConfig)
 				client.Command = new(SuccessfulTerraformCommand)
-				stdout, err = client.Plan()
+				stdout, err = client.Plan(false)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -377,7 +377,7 @@ var _ = Describe("Client", func() {
 				client.SetCredentials(validCredentials)
 				client.SetConfig(invalidTerraformConfig)
 				client.Command = new(FailingTerraformCommand)
-				stdout, err = client.Plan()
+				stdout, err = client.Plan(false)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -405,7 +405,7 @@ var _ = Describe("Client", func() {
 				client.SetCredentials(validCredentials)
 				client.SetConfig(emptyTerraformConfig)
 				client.Command = new(SuccessfulTerraformCommand)
-				stdout, err = client.Plan()
+				stdout, err = client.Plan(false)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -434,7 +434,7 @@ var _ = Describe("Client", func() {
 				client.SetConfig(validTerraformConfig)
 				client.SetState(validTerraformState)
 				client.Command = new(SuccessfulTerraformCommand)
-				stdout, err = client.Plan()
+				stdout, err = client.Plan(false)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())
@@ -470,7 +470,7 @@ var _ = Describe("Client", func() {
 				client.SetConfig(validTerraformConfig)
 				client.SetState(invalidTerraformState)
 				client.Command = new(FailingTerraformCommand)
-				stdout, err = client.Plan()
+				stdout, err = client.Plan(false)
 			})
 			It("Should error", func() {
 				Expect(err).To(HaveOccurred())
@@ -503,7 +503,7 @@ var _ = Describe("Client", func() {
 				client.SetConfig(validTerraformConfig)
 				client.SetState(emptyTerraformState)
 				client.Command = new(SuccessfulTerraformCommand)
-				stdout, err = client.Plan()
+				stdout, err = client.Plan(false)
 			})
 			It("Should not error", func() {
 				Expect(err).NotTo(HaveOccurred())

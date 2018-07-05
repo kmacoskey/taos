@@ -32,7 +32,7 @@ type TerraformClient interface {
 	ClientInit() error
 	ClientDestroy() error
 	Init() (string, error)
-	Plan() (string, error)
+	Plan(bool) (string, error)
 	Apply() ([]byte, string, error)
 	Destroy() ([]byte, string, error)
 	Outputs() (string, error)

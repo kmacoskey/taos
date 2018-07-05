@@ -18,7 +18,7 @@ type TerraformClient interface {
 	ClientInit() error
 	ClientDestroy() error
 	Init() (string, error)
-	Plan() (string, error)
+	Plan(bool) (string, error)
 	Apply() ([]byte, string, error)
 	Destroy() ([]byte, string, error)
 	Outputs() ([]byte, error)
@@ -220,7 +220,7 @@ func (client *Client) Init() (string, error) {
 	return stdout, nil
 }
 
-func (client *Client) Plan() (string, error) {
+func (client *Client) Plan(destroy bool) (string, error) {
 	_, err := client.Init()
 	if err != nil {
 		return "", err
@@ -229,6 +229,10 @@ func (client *Client) Plan() (string, error) {
 	planArgs := []string{
 		"plan",
 		"-input=false", // do not prompt for inputs
+	}
+
+	if destroy {
+		planArgs = append(planArgs, "-destroy")
 	}
 
 	client.Terraform.PlanFile = filepath.Join(client.Terraform.WorkingDir, client.Terraform.PlanFileName)
@@ -249,7 +253,7 @@ func (client *Client) Plan() (string, error) {
 }
 
 func (client *Client) Apply() ([]byte, string, error) {
-	_, err := client.Plan()
+	_, err := client.Plan(false)
 	if err != nil {
 		return nil, "", err
 	}
@@ -282,7 +286,7 @@ func (client *Client) Apply() ([]byte, string, error) {
 }
 
 func (client *Client) Destroy() ([]byte, string, error) {
-	_, err := client.Plan()
+	_, err := client.Plan(true)
 	if err != nil {
 		return nil, "", err
 	}
