@@ -1,0 +1,18 @@
+version: '3'
+services:
+  taos:
+    build: .
+    ports:
+    - "8080:8080"
+    depends_on:
+    - postgres
+    volumes:
+    - ./config.yml:/config.yml
+  postgres:
+    image: "postgres:11.1-alpine"
+    volumes:
+    - ./init.sql:/docker-entrypoint-initdb.d/10-init-clusters-table.sql
+    environment:
+    - POSTGRES_PASSWORD
+    - POSTGRES_USER=taos
+    - POSTGRES_DB=taos
